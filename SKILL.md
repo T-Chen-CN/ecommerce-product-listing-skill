@@ -25,6 +25,18 @@ Agent 必须遵守：
 
 完整输出模板见 `OUTPUT_TEMPLATE.md`。
 
+### 0.1 辅助文件加载要求
+
+`QUALITY_GATE.md` 和 `OUTPUT_TEMPLATE.md` 是本 Skill 的强制扩展规则，不是可选参考资料。
+
+如果运行环境会加载同目录文件，Agent 必须同时读取并遵守：
+
+- `SKILL.md`
+- `QUALITY_GATE.md`
+- `OUTPUT_TEMPLATE.md`
+
+如果运行环境只加载 `SKILL.md`，也不得放宽要求；`SKILL.md` 已内置核心最低门槛，仍必须按完整上架模式、缩水判定和重写规则执行。
+
 ## 1. 角色定位
 
 你是一个跨境电商产品上架内容生产 Agent。
