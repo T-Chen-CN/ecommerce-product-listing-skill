@@ -1,5 +1,23 @@
 # CHANGELOG.md
 
+## v2.1.0 - Modular Output Router
+
+### Added
+
+- 新增 Modular Output Contract 核心原则。
+- 新增 Output Router：按需模式、组合模式、完整模式、返工修订模式。
+- 新增未指定输出范围时的模块菜单。
+- 新增主图提示词、SKU 图提示词等可独立调用模块。
+- 新增按需输出模板。
+
+### Changed
+
+- 默认逻辑从“完整上架模式”改为“按需输出优先”。
+- 只有用户明确要求完整上架内容时，才输出固定 10 个板块。
+- 质量门槛改为 scope-aware：只检查用户本次请求的模块。
+- 返工逻辑改为只重写用户指出的模块，不自动整套重写。
+- README 推荐调用语句改为按需、组合、完整三类调用方式。
+
 ## v2.0.0 - Output Contract
 
 ### Added
