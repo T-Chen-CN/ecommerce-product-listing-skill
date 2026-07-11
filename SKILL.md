@@ -636,13 +636,25 @@ Agent 必须按以下优先级顺序解析 `{agent_name}`：
 
 ### 17.3 名字规范
 
-- 支持中文 / 英文 / 数字 / 简单标点。
-- 建议 1-6 个字，不含 `/`、`\`、`:` 等文件系统禁用字符（这些会污染飞书 API 请求）。
+- 支持中文 / 英文 / 数字。
+- 建议 1-6 个字，**禁止**含 `/`、`\`、`:`、`|`、`*`、`?`、`<`、`>`、`"` 等字符（飞书云空间 `create_folder` API 会拒绝这些字符作为文件夹名，且部分字符会破坏本地路径拼接）。
+- **禁止**首尾空格（飞书 API 会保留原始空格，产生难以肉眼分辨的重复目录）。
 - 首次使用时 Agent 应向用户确认："我以 `<agent_name>` 身份创建飞书云文档目录，对吗？"
 
 ## 18. 飞书云文档输出模式（v2.5 新增）
 
 飞书渠道 + `lark-cli` 已认证时，产品文案与图片的最终交付通道为**飞书云文档（Docx）**。本章定义了目录规则、批次规则、Docx 结构、图片处理和交付形态。
+
+**前置阅读要求（`lark-cli` 强制约定）：** 进入本章任何 `docs +*` 操作前，Agent **必须**先跑 `lark-cli skills read lark-doc` 及以下参考文件，获取版本对齐的最新参数与工作流。**不得**通过 `--help` 或本 skill 自行推断 docs 参数：
+
+```bash
+lark-cli skills read lark-doc                                       # 主入口
+lark-cli skills read lark-doc references/lark-doc-create.md         # 创建 docx
+lark-cli skills read lark-doc references/lark-doc-md.md             # markdown 语法（推荐格式）
+lark-cli skills read lark-doc references/lark-doc-media-insert.md   # 图片插入
+```
+
+**lark-cli 通用路径陷阱（务必记住）：** 所有 `--file`、`--content @<path>` 参数**只接受当前工作目录下的相对路径**，绝对路径（如 `/tmp/xxx.png`）会报 `unsafe file path`。上传前 `cd` 到目标目录，或把资源复制到 cwd 相对路径。
 
 ### 18.1 目标目录路径
 
@@ -675,20 +687,28 @@ Agent 必须按以下优先级顺序解析 `{agent_name}`：
 
 ### 18.3 目录幂等创建
 
-**Skill 不缓存 folder_token**，每次跑通过 API 探测。逐层做「查子文件夹是否存在，缺则建」：
+**Skill 不缓存 folder_token**，每次跑通过 API 探测。逐层做「查子文件夹是否存在，缺则建」。**优先使用 shortcut** `drive +create-folder`；shortcut 未覆盖的场景（如根 token 探测、分页列子文件夹）用 `lark-cli api` 走 raw：
 
-```bash
-# 1. 拿"我的空间"根 folder_token
-lark-cli api GET /open-apis/drive/explorer/v2/root_folder/meta --jq '.data.token'
+```python
+# 伪代码（Agent 内部实际用 python / shell 组合调用 lark-cli 都可）
 
-# 2. 逐层 ensure（伪代码）
+# 1. 拿"我的空间"根 folder_token（raw，无 shortcut）
+root = lark-cli api GET /open-apis/drive/explorer/v2/root_folder/meta --jq '.data.token'
+
+# 2. 逐层 ensure
 parent = root
 for name in ["{agent_name}", "电商需求", "Listing", "YYYYMMDD-{slug}"]:
-    children = lark-cli api GET /open-apis/drive/v1/files --params '{"folder_token":"$parent","page_size":100}'
+    # 2a. 列出 parent 下所有子文件夹（分页；page_size 上限 200）
+    children = lark-cli api GET /open-apis/drive/v1/files \
+                 --params '{"folder_token": <parent 变量>, "page_size": 200}'
     if 存在 type=folder 且 name == 目标名:
         parent = 该 token
     else:
-        parent = lark-cli api POST /open-apis/drive/v1/files/create_folder --data '{"folder_token":"$parent","name":"目标名"}'
+        # 2b. 创建（推荐 shortcut）
+        parent = lark-cli drive +create-folder \
+                   --folder-token <parent 变量> \
+                   --name <目标名> \
+                   --jq '.data.token'
 ```
 
 第 4 层 `YYYYMMDD-{slug}` 特殊：如果已存在同 slug 目录（无论 YYYYMMDD 是哪天），Agent **复用**（不建新）；如果不存在则以**今天日期**建。
@@ -725,32 +745,94 @@ for name in ["{agent_name}", "电商需求", "Listing", "YYYYMMDD-{slug}"]:
 
 同一张本地 png 在飞书内部产生两个 token，各有用途，Agent 必须上传两次：
 
-| Token 类型 | API | 用途 | 有效期 |
-|---|---|---|---|
-| `file_token` | `POST /open-apis/drive/v1/medias/upload_all`（`parent_type=docx_image` / `parent_node=<docx_token>`）| Docx 图片块内嵌 + 云盘持久化 | 永久 |
-| `image_key` | `POST /open-apis/im/v1/images`（`image_type=message`）| 飞书 IM 交互卡片显示 | 24 小时 |
+| Token 类型 | 推荐 shortcut | Identity | 用途 | 有效期 |
+|---|---|---|---|---|
+| `file_token` | `lark-cli docs +media-insert --doc <docx_token> --type image --file ./xxx.png --selection-with-ellipsis "位置 NN · ..." --caption "MainXXX-NN"` | `user`（默认） | Docx 图片块内嵌 + 云盘持久化 | 永久 |
+| `image_key` | `lark-cli im images create --as bot --data '{"image_type":"message"}' --file image=./xxx.png` | **`bot`**（用户身份此 API 无权限，必须显式 `--as bot`）| 飞书 IM 交互卡片显示 | 24 小时 |
 
-Agent 在流程中记录每张图的两个 token 到内部状态，交付时按用途取用。
+**关键细节：**
 
-### 18.7 Docx 结构
+- `docs +media-insert` 是"上传 + 插入 + 绑定"3 合 1 shortcut，官方文档称 4 步编排 + auto-rollback；返回 `file_token` + `block_id` + `document_id`，无需 Agent 自己管理 `parent_type` / `parent_node` 参数。
+- `im images create` **必须显式 `--as bot`**；用户身份调用会返回权限错误。这是 lark-cli 的 identity 约束，不是我们的选择。
+- 两次上传是**独立**的：`file_token` 存云盘持久，`image_key` 存 IM 消息资源。同一张图上传两次不会浪费 quota（飞书 API 免费）。
+- 上传顺序可并行；先上传 IM `image_key` 或先插 Docx `file_token` 都可，各不依赖。
+- **cwd 陷阱：** 两个 shortcut 的 `--file` 都要求相对路径，先 `cd` 到图片所在目录。
+
+Agent 在流程中把每张图的 `{file_token, image_key, block_id}` 记录到内部状态。交付时：Docx 内嵌已自动完成；卡片发送时把 `image_key` 传给 `feishu-tools send-card`。
+
+### 18.7 Docx 结构与生成流程
 
 Docx 内部按 v2.5 固定结构（§1-§11）：
 
-| 章节 | 内容 |
-|---|---|
-| §1 标题建议 | 3 组标题 |
-| §2 核心卖点 | 8 条卖点 |
-| §3 详情文案 | 7 小节完整详情 |
-| §4 9 图提示词 | 三段式提示词 |
-| §5 SKU 命名 | 覆盖全颜色 / 版本 |
-| §6 关键词 | 30+ 关键词 |
-| §7 规格参数 | 参数表 |
-| §8 包装清单 | 清单列表 |
-| §9 风险提醒 | 合规提醒 |
-| §10 图片汇总 | 9 张图按位置 01-09 分节，每节配对应图片块 |
-| §11 Post-QA 报告 | 🟢/🟡/🔴 汇总 + 逐图诊断 + 修复建议 |
+| 章节 | 内容 | Docx 层级 |
+|---|---|---|
+| §1 标题建议 | 3 组标题 | h1 |
+| §2 核心卖点 | 8 条卖点 | h1 |
+| §3 详情文案 | 7 小节完整详情 | h1 |
+| §4 9 图提示词 | 三段式提示词 | h1 |
+| §5 SKU 命名 | 覆盖全颜色 / 版本 | h1 |
+| §6 关键词 | 30+ 关键词 | h1 |
+| §7 规格参数 | 参数表 | h1 |
+| §8 包装清单 | 清单列表 | h1 |
+| §9 风险提醒 | 合规提醒 | h1 |
+| §10 图片汇总 | 9 张图按位置分节，每节含 h2「位置 NN · 用途」+ 对应图片块 | h1 + h2×9 |
+| §11 Post-QA 报告 | 🟢/🟡/🔴 汇总 + 逐图诊断 + 修复建议 | h1 |
 
-每章用飞书 Docx Heading 1 block。图片以 image block 内嵌在 §10 的对应子节里。
+**推荐生成流程（两阶段）：**
+
+**阶段 1：markdown 骨架一次性 create**
+
+把 §1-§11 全部文案 + §10 的 9 个 h2 占位符写成一个 markdown 文件，用 `docs +create --doc-format markdown` 一次性建 Docx：
+
+```bash
+# Agent 先把完整文案写入 cwd 下的相对路径文件
+cat > ./_docx_body.md << 'MDEOF'
+## §1 标题建议
+...（3 组标题）...
+
+## §2 核心卖点
+...（8 条）...
+
+## §10 图片汇总
+
+### 位置 01 · 主图
+
+### 位置 02 · 白底细节
+
+### 位置 03 · 45 度角
+...（余下 6 个位置 h3）...
+
+## §11 Post-QA 报告
+...
+MDEOF
+
+lark-cli docs +create \
+  --parent-token <product_folder_token> \
+  --doc-format markdown \
+  --title "YYYYMMDD-{slug}-{批次:03d}" \
+  --content @_docx_body.md \
+  --jq '.data.document.document_id'  # 返回 docx_token
+```
+
+**阶段 2：逐张精准插入图片**
+
+每张图用 `docs +media-insert --selection-with-ellipsis "位置 NN · ..."` 定位到对应 h2/h3 后插入：
+
+```bash
+cd <图片所在目录>  # cwd 相对路径要求
+for i in 01 02 03 04 05 06 07 08 09; do
+  lark-cli docs +media-insert \
+    --doc <docx_token> \
+    --type image \
+    --file ./Main{批次:03d}-${i}.png \
+    --selection-with-ellipsis "位置 ${i} · <本图用途>" \
+    --caption "Main{批次:03d}-${i}"
+done
+```
+
+**为什么两阶段：** markdown 只支持网络图片（`![alt](url)`），本地图片必须走 `+media-insert`；把它们拆开让骨架文本一次搞定，图片精准插入到对应 h2 之后，比手写 XML block 简单得多。
+
+**Markdown 转义要点：** 写入 markdown 时字面文本里的 `\`、`` ` ``、`*`、`_`、`[`、`]`、`$`、`~`、`<` 必须转义；行首的 `#`、`+`、`-`、`>` 也要转义。详见 `lark-cli skills read lark-doc references/lark-doc-md.md`。
 
 ### 18.8 生图卡片（配合 Docx）
 
@@ -775,7 +857,8 @@ Docx 生成完毕后，Agent 在聊天框只发一条消息（**零文案输出*
 
 ### 18.10 错误恢复
 
-- Docx 创建到一半失败：删掉半成品 Docx；已上传的图片保留（云盘中，下次续跑可复用）；报错并明确告诉用户失败在哪一步。
+- Docx 创建到一半失败：删掉半成品 Docx（`lark-cli drive +delete --file-token <docx_token> --type docx --yes`，属于高风险操作 API，需 `--yes` 确认；Agent 在此场景下可自动 `--yes`）；已上传的图片保留（云盘中，下次续跑可复用）；报错并明确告诉用户失败在哪一步。
 - 图片上传失败：单张重试 3 次；仍失败 → 报错并保留已成功的部分，用户可选择"跳过失败张次"或"整批重跑"。
 - 飞书 API 限流：指数退避重试 3 次；仍失败 → 报错。
 - Agent 不得静默重试超过 3 次，不得为规避错误改动路径或跳过步骤。
+- `lark-cli` 命令中断 / kill 后：清理 cwd 下的临时 `_docx_body.md` 等中间文件（skill 不留残留）。

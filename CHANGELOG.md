@@ -155,6 +155,18 @@
 
 ## [2.5.0] - 2026-07-12
 
+### Self-review + e2e test 修补（同一 PR 内）
+- **§18 头部** 增加 lark-cli 强制约定：进入 docs 操作前 MUST 先跑 `lark-cli skills read lark-doc`（含 create / md / media-insert 三份 references）。
+- **§18 头部** 增加"lark-cli `--file` 只接受相对路径"通用陷阱说明。
+- **§18.3** 目录 ensure 从纯 raw API 改为"shortcut 优先"：`drive +create-folder` 用于创建，raw `api GET /open-apis/drive/v1/files` 用于列子文件夹。
+- **§18.6** 图片双 token 上传从手写 API 改为推荐 shortcut：Docx 走 `docs +media-insert`；IM 走 `im images create --as bot`（必须 bot 身份）。
+- **§18.7** Docx 生成流程明确"两阶段"：markdown 一次性 create 骨架（含 h2 占位符）→ 逐张 `+media-insert --selection-with-ellipsis` 精准插入到位置 NN 之后。
+- **§18.10** 错误恢复补充 `drive +delete --type docx --yes` 的具体调用姿势，以及 cwd 中间文件清理。
+- **§17.3** Agent 名字规范扩充禁用字符列表（`/ \ : | * ? < > "` 全部禁止）。
+- **QUALITY_GATE §14.5** 双 token 断言明确 identity 约束（Docx 用 user；IM 用 bot）。
+
+**修补来源：** 本地 e2e 全链路 API 实测（目录 ensure、Docx create、双 token 上传、精准图片插入、清理），确认所有推荐姿势可运行，并暴露了 6 个书面文档不足的问题。测试路径 `/唐予安/电商需求/Listing/20260712-zgar-001-e2e-test/` 及产出物已全部回滚清理。
+
 ### Added
 - **飞书云文档交付模式**（SKILL §18）：飞书渠道下，产出统一进 Docx 存储到用户飞书云空间。
   - 目录路径：`/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`。
