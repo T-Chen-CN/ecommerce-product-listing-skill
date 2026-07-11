@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.4.0 Post-Feishu-v0.2 Fixes: Version-Aware Preflight + Multi-Variant Prompt Block + QA Fix Suggestions**
+当前版本：**v2.6.2 Slug Edge Cases: Empty Rejection + Whitespace Normalization**
 
 ## 适用场景
 
@@ -229,7 +229,7 @@ ecommerce-product-listing-skill/
 **变更点：**
 
 - **新增硬依赖：** `lark-cli`（`@larksuite/cli >= 1.0.0`）。`lark-cli auth status --json` 必须 user identity ready。
-- **新增目录结构：** `/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
+- **新增目录结构：** `/{agent_name}/电商需求/Listing/{slug}/`（v2.6.1 简化：去掉日期前缀）；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
 - **新增两套批次计数器：** 图片 `Main{批次}-{位置}` 逐张独立 +1；Docx `YYYYMMDD-{slug}-{批次}` 每次跑都 +1。
 - **新增 Docx 结构：** §1-§10 10 段文案 + §11 Post-QA 报告，共 11 章。
 - **新增图片双 token：** 云盘 `file_token`（永久，用于 Docx 内嵌）+ IM `image_key`（24h，用于卡片）。
@@ -239,3 +239,58 @@ ecommerce-product-listing-skill/
   - 聊天框：仅 Docx 链接 + 目录链接（零文案输出）
 - **退回路径：** `lark-cli` 未认证且用户拒绝授权时，退回第 16 章图文卡片。
 - **详见：** SKILL §17 §18 / QUALITY_GATE §14 / OUTPUT_TEMPLATE §4。
+
+## v2.6 · Docx 章节 = 输出范围镜像 + 飞书渠道全成品走 Docx（2026-07-12）
+
+v2.6 修 v2.5 两个实战暴露的设计缺陷：
+
+1. **Docx 章节从固定 11 章 → 动态组装**：Docx 内一级章节 = 本次用户实际请求的模块，一一对应。四种典型形态：
+   - **文案 Docx**（9 章）：完整文案模式，本轮未生图
+   - **生图 Docx**（2 章）：纯生图任务，文案已在其他 Docx
+   - **全套 Docx**（11 章）：一次性完成文案 + 生图
+   - **按需/组合 Docx**（变量）：组合模块的完整版交付
+2. **交付分流规则从生图子流程 → 通用交付层**：飞书渠道 + `lark-cli` 已认证时，所有完整成品交付（完整文案 / 生图 / 完整=文案+图 / 组合模块完整交付）都走 Docx；聊天框只发链接。仅单模块小交付、返工修订、用户显式指示时才走聊天框。
+
+**新增：**
+
+- **§0 v2.6 新增原则** 两条（Docx 章节镜像 + 飞书全成品走 Docx）+ **Agent 必须遵守** 编号 11、12。
+- **§18.0 触发条件**：显式列出走 Docx / 不走 Docx 的场景表。
+- **§18.9 聊天框消息**按 Docx 形态分支（文案 Docx 无 IM 卡片行；生图 / 全套 Docx 才加）。
+
+**详见：** SKILL §0 §5 §8.3 §18 / CHANGELOG v2.6.0.
+
+## v2.6.1 · Slug 极简化 = 产品身份 + 国家代码（2026-07-12）
+
+v2.6.1 修 v2.6 slug 规则的过度限制。核心原则：**Slug 是产品身份，不是产品描述**。
+
+**新规则**：
+
+- **产品身份完全按用户原样保留**：不做大小写变换、不做白名单过滤、不做美化。`B48` 就是 `B48`，`iPhone-15-Pro` 就是 `iPhone-15-Pro`。
+- **国家代码用 ISO 3166-1 alpha-2 大写**：`VN` / `US` / `TH` / `BR` / `JP` / `KR` / `DE` / `FR` …
+- **拼接格式**：`{品牌型号原样}-{国家代码}`，例：`B48-VN`、`Anker-Q30-US`。
+- **目录名不再带日期前缀**：日期只出现在 Docx 文件名里。
+- **只删文件系统禁用字符** `/ \\ : * ? " < > |`，其他字符（`_ + . () ! # $ Đ é` 等）全部保留。
+- **变体不进 slug**：颜色（Nude / Đen）、语言（越南语 / 泰语）不影响 slug；同一产品跨颜色跨批次都在同一目录里由 Docx 批次号区分。
+
+**目录结构示例**：
+
+```
+/唐予安/电商需求/Listing/
+├── B48-VN/                       ← 越南版 B48
+│   ├── Main001-01.png
+│   └── 20260712-B48-VN-001.docx
+├── B48-TH/                       ← 泰国版同 B48（独立目录）
+└── Anker-Q30-US/                 ← 美国 Anker Q30
+```
+
+**详见**：SKILL §0（原则 9）§18.1 §18.4 / QUALITY_GATE §14.1 / CHANGELOG v2.6.1.
+
+## v2.6.2 · Slug 边角防呆（2026-07-12）
+
+v2.6.2 补 v2.6.1 slug 规则的两个边角：
+
+- **空品牌型号打回**：如果 Agent 抽不出品牌/型号（用户只说了品类"蓝牙耳机"、纯乱码、或全被删字符），必须打回用户重问，禁止生成 `-VN` 这种残缺目录。
+- **Whitespace 归一**：空格 / tab / 换行 / CR 统一转横线；避免用户从表格粘贴带换行的产品名时 slug 里夹了真换行字符。
+- **Emoji 保留**：符合 v2.6.1 "用户原样"哲学，`B48🎧Pro-VN` 合法。
+
+**详见**：SKILL §0（原则 10）§18.4 / QUALITY_GATE §14.1 / CHANGELOG v2.6.2.
