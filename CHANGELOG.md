@@ -152,3 +152,28 @@
 - 修复 9 图提示词有时缺少商业文字说明的问题。
 - 修复 9 图提示词有时互相引用的问题。
 - 修复输入信息较少时整体输出被压缩的问题。
+
+## [2.5.0] - 2026-07-12
+
+### Added
+- **飞书云文档交付模式**（SKILL §18）：飞书渠道下，产出统一进 Docx 存储到用户飞书云空间。
+  - 目录路径：`/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`。
+  - Agent 名从 `IDENTITY.md` 动态解析（SKILL §17），禁止硬编码。
+  - 两套批次计数器：图片逐张独立 +1；Docx 每次跑都 +1。
+  - Docx 结构固定 §1-§11：10 段文案 + Post-QA 报告。
+  - 图片双 token：云盘 `file_token`（永久，Docx 内嵌）+ IM `image_key`（24h，卡片显示）。
+- **`lark-cli` 硬依赖**（SKILL §15.1）：`@larksuite/cli >= 1.0.0`，飞书渠道必需。
+- **`lark-cli` 认证 preflight**（SKILL §15.2）：检测 user identity ready 状态；`AUTH_MISSING` 时询问用户是否授权，**不设超时**。
+- **退回路径**（SKILL §16 头）：`lark-cli` 未认证 + 用户拒绝授权 → 走第 16 章图文卡片。
+- **QUALITY_GATE §14**：Docx 目录 / 批次 / 结构 / 双 token / 聊天框零文案的 7 条断言。
+- **OUTPUT_TEMPLATE §4**：Docx / 生图卡片 caption / 聊天框消息模板。
+
+### Changed
+- **§6 步骤 5** 从"send-card 单路径"改写为按渠道分流的"分渠道分发"（飞书 → §18 Docx / 其他 → §16 卡片）。
+- **§16 图文交付到飞书** 定位从"主交付通道"改为"退回路径 / 非 Docx 场景"。
+- **frontmatter version**：2.4.0 → 2.5.0。
+
+### Notes
+- 生成 slug 由 agent 从用户自然语言中抽品牌+型号后自动生成，用户可改"抽出的短语"但不接受自定义 slug 规则。支持中文 / 英文 / 数字 / 横线。
+- Preflight 询问不设超时；用户随时回复继续 / 拒绝退回。
+

@@ -220,3 +220,22 @@ ecommerce-product-listing-skill/
 - 所有提示词必须独立完整，不能互相引用
 - 规则必须跨类目通用，不绑定单一产品类型
 - 不得编写用户未提供的参数、等级、背书或绝对化承诺
+
+
+## v2.5 · 飞书云文档交付主通道（2026-07-12）
+
+自 v2.5 起，飞书渠道下所有产出**统一存到用户飞书云空间的 Docx 中**，聊天框只发链接。
+
+**变更点：**
+
+- **新增硬依赖：** `lark-cli`（`@larksuite/cli >= 1.0.0`）。`lark-cli auth status --json` 必须 user identity ready。
+- **新增目录结构：** `/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
+- **新增两套批次计数器：** 图片 `Main{批次}-{位置}` 逐张独立 +1；Docx `YYYYMMDD-{slug}-{批次}` 每次跑都 +1。
+- **新增 Docx 结构：** §1-§10 10 段文案 + §11 Post-QA 报告，共 11 章。
+- **新增图片双 token：** 云盘 `file_token`（永久，用于 Docx 内嵌）+ IM `image_key`（24h，用于卡片）。
+- **交付路径改写：**
+  - 飞书 Docx（主）：10 段文案 + 图片内嵌 + QA 报告
+  - 生图卡片（副）：每张图 + 用途·QA·修复建议
+  - 聊天框：仅 Docx 链接 + 目录链接（零文案输出）
+- **退回路径：** `lark-cli` 未认证且用户拒绝授权时，退回第 16 章图文卡片。
+- **详见：** SKILL §17 §18 / QUALITY_GATE §14 / OUTPUT_TEMPLATE §4。
