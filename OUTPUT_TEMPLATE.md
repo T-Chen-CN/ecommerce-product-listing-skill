@@ -468,7 +468,7 @@
 
 ```text
 📂 产品目录已就绪：
-  路径：/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/
+  路径：/{agent_name}/电商需求/Listing/{slug}/
   状态：{已存在，复用 | 新建}
   首次创建日：{原 YYYYMMDD}
 ```

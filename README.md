@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.6.0 Docx Chapters Mirror Output Scope + Feishu Docx for All Complete Deliveries**
+当前版本：**v2.6.1 Simplified Slug: Product ID + Country Code (User-Preserving)**
 
 ## 适用场景
 
@@ -229,7 +229,7 @@ ecommerce-product-listing-skill/
 **变更点：**
 
 - **新增硬依赖：** `lark-cli`（`@larksuite/cli >= 1.0.0`）。`lark-cli auth status --json` 必须 user identity ready。
-- **新增目录结构：** `/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
+- **新增目录结构：** `/{agent_name}/电商需求/Listing/{slug}/`（v2.6.1 简化：去掉日期前缀）；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
 - **新增两套批次计数器：** 图片 `Main{批次}-{位置}` 逐张独立 +1；Docx `YYYYMMDD-{slug}-{批次}` 每次跑都 +1。
 - **新增 Docx 结构：** §1-§10 10 段文案 + §11 Post-QA 报告，共 11 章。
 - **新增图片双 token：** 云盘 `file_token`（永久，用于 Docx 内嵌）+ IM `image_key`（24h，用于卡片）。
@@ -258,3 +258,29 @@ v2.6 修 v2.5 两个实战暴露的设计缺陷：
 - **§18.9 聊天框消息**按 Docx 形态分支（文案 Docx 无 IM 卡片行；生图 / 全套 Docx 才加）。
 
 **详见：** SKILL §0 §5 §8.3 §18 / CHANGELOG v2.6.0.
+
+## v2.6.1 · Slug 极简化 = 产品身份 + 国家代码（2026-07-12）
+
+v2.6.1 修 v2.6 slug 规则的过度限制。核心原则：**Slug 是产品身份，不是产品描述**。
+
+**新规则**：
+
+- **产品身份完全按用户原样保留**：不做大小写变换、不做白名单过滤、不做美化。`B48` 就是 `B48`，`iPhone-15-Pro` 就是 `iPhone-15-Pro`。
+- **国家代码用 ISO 3166-1 alpha-2 大写**：`VN` / `US` / `TH` / `BR` / `JP` / `KR` / `DE` / `FR` …
+- **拼接格式**：`{品牌型号原样}-{国家代码}`，例：`B48-VN`、`Anker-Q30-US`。
+- **目录名不再带日期前缀**：日期只出现在 Docx 文件名里。
+- **只删文件系统禁用字符** `/ \\ : * ? " < > |`，其他字符（`_ + . () ! # $ Đ é` 等）全部保留。
+- **变体不进 slug**：颜色（Nude / Đen）、语言（越南语 / 泰语）不影响 slug；同一产品跨颜色跨批次都在同一目录里由 Docx 批次号区分。
+
+**目录结构示例**：
+
+```
+/唐予安/电商需求/Listing/
+├── B48-VN/                       ← 越南版 B48
+│   ├── Main001-01.png
+│   └── 20260712-B48-VN-001.docx
+├── B48-TH/                       ← 泰国版同 B48（独立目录）
+└── Anker-Q30-US/                 ← 美国 Anker Q30
+```
+
+**详见**：SKILL §0（原则 9）§18.1 §18.4 / QUALITY_GATE §14.1 / CHANGELOG v2.6.1.
