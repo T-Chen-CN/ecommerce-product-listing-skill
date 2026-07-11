@@ -155,6 +155,14 @@
 
 ## [2.5.0] - 2026-07-12
 
+### 层级序号规范（round-4，SKILL / OUTPUT_TEMPLATE）
+
+- 新增 SKILL §17.4「输出层级序号规范」：一/二/三…（h2）→（一）/（二）/（三）…（h3）→ 1./2./3.…（h4）→ 1.1/1.2/1.3…（h5）。
+- 改 SKILL §18.7 Docx 骨架示例：`§N` 前缀改成中式序号；图片汇总下位置改成 h3「（N）图 N · 用途」；`docs +media-insert --selection-with-ellipsis` 示例用中式序号锚点。
+- 改 OUTPUT_TEMPLATE §2 完整上架模式：加层级序号规范小节，引用 SKILL §17.4。
+- 目的：统一飞书云文档、长卡片、导出 markdown 等**完整成品**的多级 heading 编号方式，便于人眼扫读与目录展示。
+
+
 ### Self-review 第四轮（空 token 陷阱）
 
 测试中发现的真 bug：当捕获 `lark-cli drive +create-folder --json` 时未重定向 stderr，进度日志 `Creating folder ...` 会污染 JSON 解析失败导致 token 为空；而 lark-cli 官方 CLI 把 `--folder-token ""` **fallback 到根目录**创建目录，造成一发不可收拾的 silent-fail cascade。
