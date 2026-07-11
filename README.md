@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.4.0 Post-Feishu-v0.2 Fixes: Version-Aware Preflight + Multi-Variant Prompt Block + QA Fix Suggestions**
+当前版本：**v2.6.0 Docx Chapters Mirror Output Scope + Feishu Docx for All Complete Deliveries**
 
 ## 适用场景
 
@@ -239,3 +239,22 @@ ecommerce-product-listing-skill/
   - 聊天框：仅 Docx 链接 + 目录链接（零文案输出）
 - **退回路径：** `lark-cli` 未认证且用户拒绝授权时，退回第 16 章图文卡片。
 - **详见：** SKILL §17 §18 / QUALITY_GATE §14 / OUTPUT_TEMPLATE §4。
+
+## v2.6 · Docx 章节 = 输出范围镜像 + 飞书渠道全成品走 Docx（2026-07-12）
+
+v2.6 修 v2.5 两个实战暴露的设计缺陷：
+
+1. **Docx 章节从固定 11 章 → 动态组装**：Docx 内一级章节 = 本次用户实际请求的模块，一一对应。四种典型形态：
+   - **文案 Docx**（9 章）：完整文案模式，本轮未生图
+   - **生图 Docx**（2 章）：纯生图任务，文案已在其他 Docx
+   - **全套 Docx**（11 章）：一次性完成文案 + 生图
+   - **按需/组合 Docx**（变量）：组合模块的完整版交付
+2. **交付分流规则从生图子流程 → 通用交付层**：飞书渠道 + `lark-cli` 已认证时，所有完整成品交付（完整文案 / 生图 / 完整=文案+图 / 组合模块完整交付）都走 Docx；聊天框只发链接。仅单模块小交付、返工修订、用户显式指示时才走聊天框。
+
+**新增：**
+
+- **§0 v2.6 新增原则** 两条（Docx 章节镜像 + 飞书全成品走 Docx）+ **Agent 必须遵守** 编号 11、12。
+- **§18.0 触发条件**：显式列出走 Docx / 不走 Docx 的场景表。
+- **§18.9 聊天框消息**按 Docx 形态分支（文案 Docx 无 IM 卡片行；生图 / 全套 Docx 才加）。
+
+**详见：** SKILL §0 §5 §8.3 §18 / CHANGELOG v2.6.0.
