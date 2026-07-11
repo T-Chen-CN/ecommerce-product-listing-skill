@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.2.0 Image-Edit-Only + Integrated Feishu Delivery**
+当前版本：**v2.3.0 Simplified 5-Step Flow + Agent-Native QA + Universal Human Model Default**
 
 ## 适用场景
 
@@ -12,19 +12,66 @@
 - 数码、家居、小家电、美妆个护、服饰配件、日用百货、母婴玩具等消费类产品
 - 标题、卖点、详情、SKU、关键词、规格、包装清单、风险提醒、主图提示词、SKU 图提示词、9 张产品图提示词等内容生产场景
 
-## v2.1 核心优化
+## v2.3 核心优化
+
+### 1. 5 步工作流（替换旧 8 步）
+
+旧版 8 步里的“前置 QA”“后置 QA”“组装报告”三个独立步骤内嵌到新的 5 步里：
+
+1. **收集信息** — 产品信息 + 上传图 + 目标市场/平台
+2. **审核补齐**（内嵌 Pre-QA 分类路由） — 分类图片、提取参数、一次补问缺失信息
+3. **出文案 + 提议生图** — 文案模块 + 9 图配比方案让用户 confirm
+4. **生图** — image-edit 模式、参考图池全传、默认真人使用场景
+5. **交付**（内嵌 Post-QA + 全图发出） — 只剔除“明显不是产品图”，QA 报告作为信息附录
+
+### 2. Agent 多模态自审
+
+Agent 本身是多模态模型，直接看图完成 QA，**不再外调 `image` 视觉子模型**。成本低、延迟小、与主会话上下文一致。
+
+### 3. 参考图分类路由（不是剔除）
+
+用户上传的图分为三类分别使用：
+
+- 🖼️ **产品视觉图**（全传给生图工具，零剔除）
+- 📋 **信息素材图**（参数表/说明书/包装文字面 — 抽取信息写文案，不送去生图）
+- ❓ **无关图**（报告用户确认，不擅自使用）
+
+### 4. 真人使用场景为通用默认
+
+所有类目（服装、3C、家居、美妆、食品、工具、办公、宠物…）默认 9 图中 4-6 张包含真人使用场景，“让买家想象自己在用”是跨类目的转化力锚点。例外必须显式声明（平铺、无模特、被过滤器拦截、产品无法体现使用）。
+
+### 5. Post-QA 只剔除“明显不是产品图”
+
+必须剔除（hard reject）：生成失败 / 损坏 / 严重跑题 / 触发安全过滤器占位图。
+
+必须保留（soft pass）：产品可辨认但有瑕疵（文字错字、手指怪、光照偏色、构图不完美）— 全发出。
+
+### 6. QA 是决策辅助不是卡点
+
+Post-QA 报告随交付卡一起发到用户，列出每张的标签（🟢推荐主图 / 🟡可用但有瑕疵 / 🔴已剔除）+ 观察记录。重出与否由用户决定，Agent 不阻塞发货、不代替用户决策。
+
+## v2.2 能力（保留）
+
+### 1. 产品图生成必须走图生图（image edit）
+
+真实生图必须 `--mode edit` + `--input-image`，禁止纯文生图（除非用户明确要求）。
+
+### 2. 依赖两个外部 CLI 工具
+
+- `image-provider-gateway`：OpenAI-compatible 生图网关，v0.2 支持 `init` 持久化配置 + 结构化错误码
+- `feishu-channel-tools`：飞书交互卡片发送 + inbound 图片查找
+
+两个都通过 `uv tool install git+https://github.com/T-Chen-CN/<repo>` 安装。运行前必须 preflight。
+
+### 3. 图文交付走飞书交互卡片
+
+不使用 OpenClaw 的 MEDIA 指令；`feishu-tools send-card --text-file` 一次性把所有图 + QA 报告打包发出。
+
+## v2.1 能力（保留）
 
 ### 1. 从“默认完整输出”升级为“模块化按需输出”
 
-v2.1 引入 Modular Output Router：
-
-- 默认按需输出
-- 用户要什么，只输出什么
-- 用户要求多个模块，只输出点名模块
-- 只有明确要求“完整上架内容”时才全量输出
-- 返工时只重写用户指出的模块
-
-目标是解决 Agent 每次调用都一次性输出全部内容、内容太长、不方便分阶段生产的问题。
+默认按需输出，用户要什么只输出什么，返工只重写点名模块。
 
 ### 2. 完整模式仍然保留
 
@@ -97,8 +144,8 @@ ecommerce-product-listing-skill/
 
 ```text
 按照 ecommerce-product-listing-skill，只产出标题建议。
-目标国家：马来西亚
-平台：TikTok Shop / Shopee / Lazada
+目标国家：<market>
+平台：<platform>
 产品信息如下：
 ……
 ```
@@ -107,8 +154,8 @@ ecommerce-product-listing-skill/
 
 ```text
 按照 ecommerce-product-listing-skill，只产出详情文案。
-目标国家：马来西亚
-平台：TikTok Shop / Shopee / Lazada
+目标国家：<market>
+平台：<platform>
 产品信息如下：
 ……
 ```
@@ -117,35 +164,27 @@ ecommerce-product-listing-skill/
 
 ```text
 按照 ecommerce-product-listing-skill，只产出 9 张独立正方形产品图提示词。
-目标国家：马来西亚
-平台：TikTok Shop / Shopee / Lazada
+目标国家：<market>
+平台：<platform>
 产品信息如下：
 ……
 ```
 
-### 只产出 SKU 命名
+### 真实生成 9 张产品图（图生图 + 飞书卡片交付）
 
 ```text
-按照 ecommerce-product-listing-skill，只产出 SKU 命名。
-颜色 / 款式如下：
-……
-```
-
-### 只产出 SKU 图提示词
-
-```text
-按照 ecommerce-product-listing-skill，只产出 SKU 图提示词。
-要求每个颜色 1 张，布局一致，只改变颜色。
-颜色如下：
-……
+用生图工具生成 9 张产品图，走图生图模式。
+参考图我已经发在上面 / 用最近一次上传的产品图。
+目标国家：<market>
+平台：<platform>
 ```
 
 ### 组合输出
 
 ```text
 按照 ecommerce-product-listing-skill，只产出：标题建议、详情文案、9 图提示词。
-目标国家：马来西亚
-平台：TikTok Shop / Shopee / Lazada
+目标国家：<market>
+平台：<platform>
 产品信息如下：
 ……
 ```
@@ -154,8 +193,8 @@ ecommerce-product-listing-skill/
 
 ```text
 按照 ecommerce-product-listing-skill，输出完整上架内容。
-目标国家：马来西亚
-平台：TikTok Shop / Shopee / Lazada
+目标国家：<market>
+平台：<platform>
 产品信息如下：
 ……
 ```
