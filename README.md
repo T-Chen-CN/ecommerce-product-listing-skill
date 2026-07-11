@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.1.0 Modular Output Router**
+当前版本：**v2.2.0 Image-Edit-Only + Integrated Feishu Delivery**
 
 ## 适用场景
 

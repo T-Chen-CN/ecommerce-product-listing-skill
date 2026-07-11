@@ -1,5 +1,31 @@
 # CHANGELOG.md
 
+## v2.2.0 - Image-Edit-Only + Integrated Feishu Delivery
+
+### Added
+
+- 新增第 11 章：产品图生成硬规则（Image-Edit-Only），禁止纯文生图。
+- 新增第 12 章：产品图生成完整工作流（8 步）：取图 → 前置 QA → 参数确认 → 三段式提示词 → 生图 → 后置 QA → 组装报告 → 飞书发货。
+- 新增第 13 章：前置图片 QA，配套 image 视觉模型的 JSON prompt 模板与 pass/conditional/reject 分流。
+- 新增第 14 章：后置生成 QA，对比参考图 vs 生成图，输出 pass/needs-revision/reject 判定。
+- 新增第 15 章：依赖工具与 preflight 校验，声明 image-provider-gateway 与 feishu-channel-tools 两个外部 CLI 依赖。
+- 新增第 16 章：图文交付到飞书，硬规定走 `feishu-tools send-card`，不再依赖 MEDIA 指令。
+- 新增 §8.3 缩水判定：真实产品图生成不合格情况。
+- 新增第 11.2 节三段式提示词模板：形态锁定块 + 产品外观描述块 + 构图/文字/背景块。
+
+### Changed
+
+- SKILL 版本升级到 2.2.0。
+- Description 更新为强调图生图（image edit）+ 前后置 QA + 飞书图文卡片交付。
+- 第 6 节内部执行流程新增第 3/7/8 步，覆盖工具 preflight、后置 QA、飞书发货。
+- 7.4 9 图提示词规则统一采用三段式模板字段。
+- 7.11 SKU 图提示词规则强调必须走图生图。
+
+### Fixed
+
+- 修复以往纯文生图导致产品还原度差的问题。
+- 修复图文交付时因 MEDIA 指令被吞而丢图的问题。
+
 ## v2.1.0 - Modular Output Router
 
 ### Added
