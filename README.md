@@ -2,7 +2,7 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.3.0 Simplified 5-Step Flow + Agent-Native QA + Universal Human Model Default**
+当前版本：**v2.4.0 Post-Feishu-v0.2 Fixes: Version-Aware Preflight + Multi-Variant Prompt Block + QA Fix Suggestions**
 
 ## 适用场景
 
@@ -11,6 +11,18 @@
 - TikTok Shop / Shopee / Lazada / Amazon / Temu / Shopify 等平台
 - 数码、家居、小家电、美妆个护、服饰配件、日用百货、母婴玩具等消费类产品
 - 标题、卖点、详情、SKU、关键词、规格、包装清单、风险提醒、主图提示词、SKU 图提示词、9 张产品图提示词等内容生产场景
+
+## v2.4 回收修正
+
+v2.4 不重写 v2.3 的任何思路，只修 5 个实战暴露的瑕疵：
+
+1. **依赖工具版本新要求**：`image-provider-gateway >= 0.2.0`、`feishu-channel-tools >= 0.2.0`。
+2. **第 15.2 Preflight** 升级为双阶段断言（存在 + 版本），避免旧版本 CLI 静默过卡。
+3. **第 16.1 拆卡描述**修正：`feishu-tools` v0.2 取消了图片张数的隐式上限，仅按 25 KiB 字节兜底。
+4. **第 11.2 提示词模板**新增可选的 Variant-Preservation Block（多 SKU / 多色 flat lay 图必填）；引入 "prompt 禁用 ASCII 双引号" 硬约束。
+5. **第 14.1 Post-QA** 每张 🟡 图必附"修复方式建议"（重出 / PS / 遮盖裁剪 / 直接使用）。
+
+详情见 CHANGELOG.md。
 
 ## v2.3 核心优化
 

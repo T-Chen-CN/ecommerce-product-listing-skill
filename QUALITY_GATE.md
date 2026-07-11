@@ -250,12 +250,16 @@ Post-QA 报告作为文字块随交付卡片一起发出。**不允许用 QA 结
 - Agent 用 QA 结果自动过滤图片而不展示给用户。
 - Agent 声称"生图成功"但没有把 QA 报告一起交付。
 - Agent 因 QA 有 🟡 图而阻塞发货。
+- **🟡 图未带"修复方式建议"字段**（重出 / PS 后处理 / 遮盖裁剪 / 直接使用 四选一）：判为不合格，Agent 必须补齐后再交付。
 
-### 13.7 图生图其他硬规则（继承 v2.2）
+### 13.7 图生图其他硬规则（继承 v2.2，并在 v2.4 强化）
 
-- 用 `image-provider-gateway`。
-- 用 `feishu-tools send-card` 交付，不走 MEDIA 指令。
-- 长文本正文用 `--text-file` 而不是 heredoc/多行字符串。
+- 用 `image-provider-gateway`，且版本 `>= 0.2.0`（支持 `init` 与结构化错误码）。
+- 用 `feishu-tools send-card` 交付，且版本 `>= 0.2.0`（取消了 "> 8 张自动拆卡" 隐式限制）；不走 MEDIA 指令。
+- Preflight 未同时断言 "存在 + 版本" 就开工者，判为不合格。
+- **Prompt 字符串中使用 ASCII 双引号 `"`**（会破坏包含它的 batch JSON 或 shell 命令行）：判为不合格，必须改为 `「」`、`“”` 或 `'`。
+- **本图涉及多个 SKU/颜色变体但 prompt 未包含 Variant-Preservation Block**：判为不合格，必须补上开销、位置、颜色、on-body 文字一一列举后重新生图。
+- 长文本正文用 `--text-file` 而不是 heredoc/多行字符串（包含代码块/反引号/`$` 符号或 > 500 字符时）。
 
 ## 14. 最终评分
 

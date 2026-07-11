@@ -1,5 +1,38 @@
 # CHANGELOG.md
 
+## v2.4.0 - Post-Feishu-v0.2 Fixes: Version-Aware Preflight + Multi-Variant Prompt Block + QA Fix Suggestions
+
+### Fixed（修正过时/遗漏）
+
+- **第 16.1 节**删除 "> 8 张自动拆卡" 的错误描述。`feishu-channel-tools >= 0.2.0` 已取消图片张数隐式上限，仅按 25 KiB 字节兜底；旧描述会误导 Agent 写不必要的人工分批逻辑。
+- **第 15.1 节**为两个依赖工具标注最低版本：`image-provider-gateway >= 0.2.0`、`feishu-channel-tools >= 0.2.0`。旧本实际依赖新版能力（init 命令、无张数封顶）但未声明。
+
+### Added
+
+- **第 15.2 节 Preflight** 升级为两阶段：先用 `command -v` 判存在，再用 `--version` 断言版本。任一 `MISSING` 或 `NEEDS_UPGRADE` 均需用户授权后重装；不得降级绕行。
+- **第 11.2 节**三段式提示词新增可选的 **Variant-Preservation Block**：当本图涉及多个 SKU/颜色变体（多色 flat lay、对比图、套装展示）时强制列举每个变体的颜色 / 位置 / on-body 文字，避免颜色串污或变体数量不对。
+- **第 11.2 节**引入"引号降降"硬约束：prompt 字符串禁用 ASCII `"`。需要强调改用中文 `「」`、`“”` 或 ASCII `'`。避免 batch JSON 语法错误。
+- **第 14.1 节 Post-QA** 每张 🟡 图必须附**修复方式建议**（重出 / PS 后处理 / 遮盖裁剪 / 直接使用 四选一），让用户一眼看到修复路径。
+
+### Changed
+
+- SKILL 版本升级到 2.4.0。
+- QUALITY_GATE.md 第 13.6 不合格列表新增：🟡 图未带修复方式建议 → 不合格。
+- QUALITY_GATE.md 第 13.7 硬规则重写：包含两个依赖的最低版本、Preflight 双阶段断言、prompt 双引号禁用、Variant-Preservation Block 必填、`--text-file` 阈值具体化。
+- OUTPUT_TEMPLATE.md 交付卡模板的逐张观察例子同步新增"修复建议"字段，包含 logo 错字 → PS，瑕疵 → 重出 等实例。
+
+### 内部背景
+
+本版本尚未重写 v2.3 的 5 步流程与 Agent 多模态自审思路；仅回收 v2.3 发布后实战暴露的 5 个具体瑕疵：
+
+1. 依赖工具 API 已升级，旧描述不再成立
+2. Preflight 无版本断言，旧版本工具会静默过卡
+3. 多变体图无专用约束，颜色串污多发
+4. 中文 prompt 中的 ASCII `"` 多次弄坏 batch JSON
+5. Post-QA 报告只列瑕疵没列路径，用户需额外提问
+
+---
+
 ## v2.3.0 - Simplified 5-Step Flow + Agent-Native QA + Universal Human Model Default
 
 ### Added
