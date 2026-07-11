@@ -714,6 +714,8 @@ for name in ["{agent_name}", "电商需求", "Listing", "YYYYMMDD-{slug}"]:
                    --jq '.data.token'
 ```
 
+**⚠️ 空 token 防呆陷阱**：`lark-cli drive +create-folder --folder-token "$X"` 里若 `$X` 为**空字符串**（上一步解析失败 / 捕获 stderr 污染了 stdout / 变量作用域丢失等），**官方 CLI 会 fallback 到根目录**建同名子目录，造成“到处建同名目录”的 silent-fail cascade；官方 --help 明说“Omit --folder-token to create in root folder”。**硬规则**：任一步获取 folder_token 后，**必须断言 token 非空非占位值**（非 `""` / `null` / `undefined`）；任一步解析失败即 hard fail，**禁止把空值传给下一步**。同时：**`--json` 捕获时必加 `2>/dev/null`**，因为 lark-cli 把进度信息写 stderr，不隔离会污染 JSON 解析。
+
 第 4 层 `YYYYMMDD-{slug}` 特殊：如果已存在同 slug 目录（无论 YYYYMMDD 是哪天），Agent **复用**（不建新）；如果不存在则以**今天日期**建。
 
 ### 18.4 Slug 规则

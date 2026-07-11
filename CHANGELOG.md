@@ -155,6 +155,16 @@
 
 ## [2.5.0] - 2026-07-12
 
+### Self-review 第四轮（空 token 陷阱）
+
+测试中发现的真 bug：当捕获 `lark-cli drive +create-folder --json` 时未重定向 stderr，进度日志 `Creating folder ...` 会污染 JSON 解析失败导致 token 为空；而 lark-cli 官方 CLI 把 `--folder-token ""` **fallback 到根目录**创建目录，造成一发不可收拾的 silent-fail cascade。
+
+同一 PR 里修：
+- **§18.3** 目录幂等创建章节新增"空 token 防呆陷阱"专块，明确要求：
+  1. 任一步解析 token 后**必须断言非空**；空值 hard fail。
+  2. **`--json` 捕获必加 `2>/dev/null`**，隔离进度信息对 stdout 的污染。
+  3. **禁止把空值传给下一步 --folder-token**。
+
 ### Self-review 第三轮（过度限制清理）
 
 老爸要求“尽可能不要给太多没必要的限制”，实测 CLI 交叉验证后放宽 6 处：
