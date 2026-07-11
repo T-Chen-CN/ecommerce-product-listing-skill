@@ -152,3 +152,80 @@
 - 修复 9 图提示词有时缺少商业文字说明的问题。
 - 修复 9 图提示词有时互相引用的问题。
 - 修复输入信息较少时整体输出被压缩的问题。
+
+## [2.5.0] - 2026-07-12
+
+### 层级序号规范（round-4，SKILL / OUTPUT_TEMPLATE）
+
+- 新增 SKILL §17.4「输出层级序号规范」：一/二/三…（h2）→（一）/（二）/（三）…（h3）→ 1./2./3.…（h4）→ 1.1/1.2/1.3…（h5）。
+- 改 SKILL §18.7 Docx 骨架示例：`§N` 前缀改成中式序号；图片汇总下位置改成 h3「（N）图 N · 用途」；`docs +media-insert --selection-with-ellipsis` 示例用中式序号锚点。
+- 改 OUTPUT_TEMPLATE §2 完整上架模式：加层级序号规范小节，引用 SKILL §17.4。
+- 目的：统一飞书云文档、长卡片、导出 markdown 等**完整成品**的多级 heading 编号方式，便于人眼扫读与目录展示。
+
+
+### Self-review 第四轮（空 token 陷阱）
+
+测试中发现的真 bug：当捕获 `lark-cli drive +create-folder --json` 时未重定向 stderr，进度日志 `Creating folder ...` 会污染 JSON 解析失败导致 token 为空；而 lark-cli 官方 CLI 把 `--folder-token ""` **fallback 到根目录**创建目录，造成一发不可收拾的 silent-fail cascade。
+
+同一 PR 里修：
+- **§18.3** 目录幂等创建章节新增"空 token 防呆陷阱"专块，明确要求：
+  1. 任一步解析 token 后**必须断言非空**；空值 hard fail。
+  2. **`--json` 捕获必加 `2>/dev/null`**，隔离进度信息对 stdout 的污染。
+  3. **禁止把空值传给下一步 --folder-token**。
+
+### Self-review 第三轮（过度限制清理）
+
+老爸要求“尽可能不要给太多没必要的限制”，实测 CLI 交叉验证后放宽 6 处：
+
+- **§16.1**：删除 "> 500 字符必须用 --text-file" 硬阈值（`feishu-channel-tools` 源码里根本没有 500 这个数），改成"含反引号/$/多行时建议"。
+- **§11.2**：prompt 禁 ASCII 双引号 -> 只在"手拼 batch JSON 或 shell 单行"时建议避免；`json.dumps` 生成 JSON 时会自动转义，没有限制必要。
+- **§16.4**：静默重试次数从 2 -> 3，对齐 §18.10 已有约定，修内部不一致。
+- **§17.3**：Agent 名长度 1-6 字"禁止" -> 1-12 字"建议"，长度本身与飞书 API 无关。
+- **§11.2**：Variant-Preservation Block"必须" -> "建议"，实测能减少变体串色但不加也能出图。
+- **§14**：🟡 图修复方式建议从"每张必须" -> "≥ 3 张时汇总建议表"，避免 agent 强制生成噪音条目。
+
+### Self-review 第二轮修补（同一 PR 内）
+
+- **🔴 §15.1 / §15.2（阻断修复）**：`image-provider-gateway` 版本要求 `>= 0.2.0` 是幻觉数字（上游只有 0.1.0）；实测本地也是 0.1.0；同时该 CLI **未实现 `--version`**，SKILL 里的 preflight 版本正则 100% 失败。修复：要求降回 `>= 0.1.0`；preflight 版本断言改成 `image-provider-gateway config path >/dev/null` 的 sanity 断言。
+- **§12 步骤 5**：过去只写"走 feishu-tools send-card"，现在明确 v2.5 分流：飞书+认证 → §18 Docx；否则 → §16 卡片。
+- **§16 头部 / §16.1**：措辞从"必须走 send-card"改为"退回路径下必须走 send-card"，与 §18 主路径区分。
+- **§8.3 不合格情况**："绕过第 16 章卡片"改为"绕过 v2.5 分流（§18 / §16）"。
+- **§18.5 表格**：Docx 批次 +1 触发条件从"每次跑 Skill"改为"每次实际生成新 Docx"，只发卡片时不 +1。
+- **§18.5 例子**：加一句解释"为什么位置 03 是批次 2"（首轮不满意重出）。
+- **§18.4 slug 规则**：改写为顺序化 5 步流程；**新增"分隔类符号 → 横线"** 覆盖 `_ + . / \\ , ; |`；加例子表覆盖 6 个 case（含 e2e 验证过的边界）。
+- **§18.9 聊天框消息**：措辞去掉"上/下条"歧义，加消息顺序建议（先链接后卡片）。
+
+### Self-review + e2e test 修补（同一 PR 内）
+- **§18 头部** 增加 lark-cli 强制约定：进入 docs 操作前 MUST 先跑 `lark-cli skills read lark-doc`（含 create / md / media-insert 三份 references）。
+- **§18 头部** 增加"lark-cli `--file` 只接受相对路径"通用陷阱说明。
+- **§18.3** 目录 ensure 从纯 raw API 改为"shortcut 优先"：`drive +create-folder` 用于创建，raw `api GET /open-apis/drive/v1/files` 用于列子文件夹。
+- **§18.6** 图片双 token 上传从手写 API 改为推荐 shortcut：Docx 走 `docs +media-insert`；IM 走 `im images create --as bot`（必须 bot 身份）。
+- **§18.7** Docx 生成流程明确"两阶段"：markdown 一次性 create 骨架（含 h2 占位符）→ 逐张 `+media-insert --selection-with-ellipsis` 精准插入到位置 NN 之后。
+- **§18.10** 错误恢复补充 `drive +delete --type docx --yes` 的具体调用姿势，以及 cwd 中间文件清理。
+- **§17.3** Agent 名字规范扩充禁用字符列表（`/ \ : | * ? < > "` 全部禁止）。
+- **QUALITY_GATE §14.5** 双 token 断言明确 identity 约束（Docx 用 user；IM 用 bot）。
+
+**修补来源：** 本地 e2e 全链路 API 实测（目录 ensure、Docx create、双 token 上传、精准图片插入、清理），确认所有推荐姿势可运行，并暴露了 6 个书面文档不足的问题。测试路径 `/唐予安/电商需求/Listing/20260712-zgar-001-e2e-test/` 及产出物已全部回滚清理。
+
+### Added
+- **飞书云文档交付模式**（SKILL §18）：飞书渠道下，产出统一进 Docx 存储到用户飞书云空间。
+  - 目录路径：`/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`。
+  - Agent 名从 `IDENTITY.md` 动态解析（SKILL §17），禁止硬编码。
+  - 两套批次计数器：图片逐张独立 +1；Docx 每次跑都 +1。
+  - Docx 结构固定 §1-§11：10 段文案 + Post-QA 报告。
+  - 图片双 token：云盘 `file_token`（永久，Docx 内嵌）+ IM `image_key`（24h，卡片显示）。
+- **`lark-cli` 硬依赖**（SKILL §15.1）：`@larksuite/cli >= 1.0.0`，飞书渠道必需。
+- **`lark-cli` 认证 preflight**（SKILL §15.2）：检测 user identity ready 状态；`AUTH_MISSING` 时询问用户是否授权，**不设超时**。
+- **退回路径**（SKILL §16 头）：`lark-cli` 未认证 + 用户拒绝授权 → 走第 16 章图文卡片。
+- **QUALITY_GATE §14**：Docx 目录 / 批次 / 结构 / 双 token / 聊天框零文案的 7 条断言。
+- **OUTPUT_TEMPLATE §4**：Docx / 生图卡片 caption / 聊天框消息模板。
+
+### Changed
+- **§6 步骤 5** 从"send-card 单路径"改写为按渠道分流的"分渠道分发"（飞书 → §18 Docx / 其他 → §16 卡片）。
+- **§16 图文交付到飞书** 定位从"主交付通道"改为"退回路径 / 非 Docx 场景"。
+- **frontmatter version**：2.4.0 → 2.5.0。
+
+### Notes
+- 生成 slug 由 agent 从用户自然语言中抽品牌+型号后自动生成，用户可改"抽出的短语"但不接受自定义 slug 规则。支持中文 / 英文 / 数字 / 横线。
+- Preflight 询问不设超时；用户随时回复继续 / 拒绝退回。
+
