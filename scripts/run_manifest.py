@@ -3,13 +3,16 @@
 
 import argparse
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 HARD_REJECT_REASONS = {"api_error", "file_corrupt", "off_topic", "safety_placeholder", "unrecognizable"}
 RETRYABLE_CODES = {"rate_limit", "server_error", "timeout", "network_error", "provider_json_error"}
 QA_LABELS = {"green", "yellow", "red"}
+TIMING_STAGES = ("wave_0", "wave_1", "wave_2", "total")
 
 
 def now():
@@ -56,6 +59,13 @@ def cmd_timing(args):
     save(args.manifest, data)
 
 
+def nonnegative_finite_float(value):
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError("seconds must be finite and >= 0")
+    return number
+
+
 def cmd_select_retry(args):
     data = load(args.manifest)
     slots = []
@@ -79,6 +89,48 @@ def is_readable_regular_file(value):
             return handle.readable()
     except OSError:
         return False
+
+
+def has_supported_image_magic(value):
+    if not is_readable_regular_file(value):
+        return False
+    try:
+        with Path(value).open("rb") as handle:
+            header = handle.read(12)
+    except OSError:
+        return False
+    return (header.startswith(b"\x89PNG\r\n\x1a\n")
+            or header.startswith(b"\xff\xd8\xff")
+            or (header.startswith(b"RIFF") and header[8:12] == b"WEBP")
+            or header.startswith((b"GIF87a", b"GIF89a")))
+
+
+def is_iso_datetime(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return True
+    except ValueError:
+        return False
+
+
+def is_conservative_identifier(value):
+    # Feishu/Lark API families use different, evolving token prefixes.  Do not
+    # invent a fixed prefix contract: require only plausible opaque evidence.
+    return isinstance(value, str) and len(value) >= 6 and not any(char.isspace() for char in value)
+
+
+def is_feishu_permalink(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").lower()
+    except ValueError:
+        return False
+    allowed = ("feishu.cn", "larksuite.com")
+    return parsed.scheme == "https" and any(host == domain or host.endswith("." + domain) for domain in allowed)
 
 
 def validation_errors(data, delivery):
@@ -116,12 +168,37 @@ def validation_errors(data, delivery):
                 errors.append(f"slot {n}: status success requires qa_label green or yellow")
             if not is_readable_regular_file(image.get("file")):
                 errors.append(f"slot {n}: delivery file must exist and be a readable regular file")
+            elif not has_supported_image_magic(image.get("file")):
+                errors.append(f"slot {n}: delivery file must have PNG/JPEG/WebP/GIF magic bytes")
             if label in {"green", "yellow"}:
                 deliverable_slots.append(n)
         elif status == "rejected" and label == "red" and reason in HARD_REJECT_REASONS:
             rejected_slots.append(n)
 
     if delivery:
+        for image in slots:
+            if image.get("status") in {"pending", "failed"}:
+                errors.append(f"slot {image.get('slot')}: status {image.get('status')} is not final for delivery")
+
+        qa = data.get("qa") or {}
+        if qa.get("mode") != "nine-image-single-round":
+            errors.append("qa.mode must be exactly nine-image-single-round")
+        if not is_iso_datetime(qa.get("reviewed_at")):
+            errors.append("qa.reviewed_at must be a non-empty parseable ISO datetime")
+
+        timings = data.get("timings") or {}
+        timing_seconds = {}
+        for stage in TIMING_STAGES:
+            entry = timings.get(stage) or {}
+            seconds = entry.get("seconds")
+            if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not math.isfinite(seconds) or seconds < 0:
+                errors.append(f"timings.{stage}.seconds must be finite and >= 0")
+            else:
+                timing_seconds[stage] = seconds
+        if len(timing_seconds) == len(TIMING_STAGES) and any(
+                timing_seconds["total"] < timing_seconds[stage] for stage in TIMING_STAGES[:-1]):
+            errors.append("timings.total.seconds must be at least each wave duration")
+
         if data.get("status") != "ready":
             errors.append("delivery status must be ready")
         delivery_state = data.get("delivery") or {}
@@ -133,17 +210,34 @@ def validation_errors(data, delivery):
             errors.append("rejected slots cannot enter the deliverable set")
 
         tokens = data.get("tokens", {})
+        if not isinstance(tokens, dict):
+            errors.append("tokens must be an object")
+            tokens = {}
+        known_token_slots = {str(n) for n in range(1, 10)}
+        for key in tokens:
+            if key not in known_token_slots:
+                errors.append(f"unknown token slot {key!r}")
         delivery_mode = data.get("delivery_mode")
         if delivery_mode not in {"docx", "card"}:
             errors.append("delivery_mode must be docx or card")
         for n in deliverable_slots:
             token = tokens.get(str(n), {})
-            if not token.get("image_key"):
+            if not isinstance(token, dict):
+                errors.append(f"slot {n}: token evidence must be an object")
+                token = {}
+            if not is_conservative_identifier(token.get("image_key")):
                 errors.append(f"slot {n}: image_key required for {delivery_mode or 'delivery'} delivery")
-            if delivery_mode == "docx" and not token.get("file_token"):
+                if token.get("image_key"):
+                    errors.append(f"slot {n}: image_key must be non-whitespace and at least 6 characters")
+            if delivery_mode == "docx" and not is_conservative_identifier(token.get("file_token")):
                 errors.append(f"slot {n}: file_token required for docx delivery")
+                if token.get("file_token"):
+                    errors.append(f"slot {n}: file_token must be non-whitespace and at least 6 characters")
         for n in rejected_slots:
             token = tokens.get(str(n), {})
+            if not isinstance(token, dict):
+                errors.append(f"slot {n}: token evidence must be an object")
+                token = {}
             if token.get("file_token") or token.get("image_key"):
                 errors.append(f"slot {n}: hard-rejected slot must not have delivery tokens")
 
@@ -152,10 +246,16 @@ def validation_errors(data, delivery):
         if delivery_mode == "docx":
             if not docx.get("token") or not docx.get("permalink"):
                 errors.append("delivery docx token and permalink required")
+            if docx.get("token") and not is_conservative_identifier(docx.get("token")):
+                errors.append("delivery docx token must be non-whitespace and at least 6 characters")
+            if docx.get("permalink") and not is_feishu_permalink(docx.get("permalink")):
+                errors.append("delivery docx permalink must be HTTPS on feishu.cn/larksuite.com or a subdomain")
             if not folder.get("permalink"):
                 errors.append("delivery folder permalink required")
+            elif not is_feishu_permalink(folder.get("permalink")):
+                errors.append("delivery folder permalink must be HTTPS on feishu.cn/larksuite.com or a subdomain")
         elif delivery_mode == "card":
-            has_file_token = any((tokens.get(str(n)) or {}).get("file_token") for n in deliverable_slots)
+            has_file_token = any(isinstance(token, dict) and token.get("file_token") for token in tokens.values())
             if has_file_token or docx.get("token") or docx.get("permalink") or folder.get("permalink"):
                 errors.append("card delivery must not retain docx or folder evidence")
         # This schema always represents the nine-image pipeline.  A copy-only
@@ -163,6 +263,8 @@ def validation_errors(data, delivery):
         card = delivery_state.get("card") or {}
         if card.get("send_success") is not True or not card.get("message_id"):
             errors.append("nine-image delivery requires card send_success true and message_id")
+        elif not is_conservative_identifier(card.get("message_id")):
+            errors.append("delivery card message_id must be non-whitespace and at least 6 characters")
     return errors
 
 
@@ -188,8 +290,8 @@ def parser():
     init.set_defaults(func=cmd_init)
     timing = sub.add_parser("timing", help="record a stage duration")
     timing.add_argument("manifest")
-    timing.add_argument("stage")
-    timing.add_argument("--seconds", required=True, type=float)
+    timing.add_argument("stage", choices=TIMING_STAGES)
+    timing.add_argument("--seconds", required=True, type=nonnegative_finite_float)
     timing.set_defaults(func=cmd_timing)
     retry = sub.add_parser("select-retry", help="print retryable failed slots as JSON")
     retry.add_argument("manifest")

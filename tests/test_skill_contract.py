@@ -72,6 +72,24 @@ class SkillContractTest(unittest.TestCase):
         self.assertNotIn("逐张做 Post-QA", joined)
         self.assertNotIn("--concurrency 3", joined)
 
+    def test_v27_preserves_origin_main_v25_canonical_relaxations(self):
+        joined = "\n".join([self.skill, self.gate, self.readme, self.changelog])
+        for phrase in [
+            "v2.5 self-review", "canonical SKILL", "不是 v2.7 新降级",
+            "Variant-Preservation Block", "不作硬门槛", "不设硬字符阈值",
+            "ASCII 双引号会自动转义", "🟡 图 ≥ 3 张时",
+        ]:
+            self.assertIn(phrase, joined, phrase)
+
+    def test_manifest_final_acceptance_evidence_is_documented(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in [
+            "nine-image-single-round", "reviewed_at", "wave_0", "wave_1", "wave_2",
+            "total", "PNG/JPEG/WebP/GIF", "success 或合法 rejected",
+        ]:
+            self.assertIn(phrase, joined, phrase)
+        self.assertNotIn("详见 SKILL §5 步骤 5", self.gate)
+
     def test_delivery_modes_and_docx_batch_rule_are_consistent(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
         for phrase in ["--delivery-mode", "docx", "card", "只发卡片", "hard-rejected"]:

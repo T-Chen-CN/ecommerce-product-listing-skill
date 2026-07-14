@@ -25,7 +25,7 @@ class ManifestCliTest(unittest.TestCase):
     def make_success_files(self, directory, data):
         for slot in data["images"]:
             image = directory / f"Main001-{slot['slot']:02d}.png"
-            image.write_bytes(b"real temporary image fixture")
+            image.write_bytes(b"\x89PNG\r\n\x1a\n" + b"fixture-image-data")
             slot.update(status="success", file=str(image), qa_label="green")
 
     def mark_delivery_ready(self, data, rejected=(), mode="docx"):
@@ -37,17 +37,24 @@ class ManifestCliTest(unittest.TestCase):
                 slot.update(status="rejected", file=None, qa_label="red", hard_reject_reason="off_topic")
             else:
                 deliverable.append(n)
-                data["tokens"][str(n)] = {"image_key": f"i{n}"}
+                data["tokens"][str(n)] = {"image_key": f"img_v2_fixture_{n:02d}"}
                 if mode == "docx":
-                    data["tokens"][str(n)]["file_token"] = f"f{n}"
+                    data["tokens"][str(n)]["file_token"] = f"file_fixture_{n:02d}"
         data["delivery"] = {
             "deliverable_slots": deliverable,
             "rejected_slots": sorted(rejected),
-            "docx": ({"token": "doc-token", "permalink": "https://example.test/docx"}
+            "docx": ({"token": "docx_fixture_token", "permalink": "https://docs.feishu.cn/docx/fixture"}
                      if mode == "docx" else {"token": None, "permalink": None}),
-            "folder": ({"permalink": "https://example.test/folder"}
+            "folder": ({"permalink": "https://acme.larksuite.com/drive/folder/fixture"}
                        if mode == "docx" else {"permalink": None}),
-            "card": {"message_id": "om_123", "send_success": True},
+            "card": {"message_id": "om_fixture_message_123", "send_success": True},
+        }
+        data["qa"] = {"mode": "nine-image-single-round", "reviewed_at": "2026-07-14T09:30:00+00:00"}
+        data["timings"] = {
+            "wave_0": {"seconds": 1.25},
+            "wave_1": {"seconds": 5.5},
+            "wave_2": {"seconds": 8.0},
+            "total": {"seconds": 9.0},
         }
         data["status"] = "ready"
 
@@ -77,6 +84,15 @@ class ManifestCliTest(unittest.TestCase):
             self.run_cli("init", path)
             self.run_cli("timing", path, "wave_0", "--seconds", "12.5")
             self.assertEqual(self.load(path)["timings"]["wave_0"]["seconds"], 12.5)
+
+    def test_timing_rejects_unknown_stage_and_non_finite_or_negative_seconds(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "run.json"
+            self.run_cli("init", path)
+            for stage, seconds in [("other", "1"), ("wave_0", "-1"), ("wave_1", "nan"), ("total", "inf")]:
+                with self.subTest(stage=stage, seconds=seconds):
+                    result = self.run_cli("timing", path, stage, "--seconds", seconds, check=False)
+                    self.assertNotEqual(result.returncode, 0)
 
     def test_select_retry_uses_code_as_authority_under_boolean_conflicts(self):
         with tempfile.TemporaryDirectory() as td:
@@ -125,6 +141,37 @@ class ManifestCliTest(unittest.TestCase):
             self.save(path, data)
             result = self.run_cli("validate", path, check=False)
             self.assertIn("readable regular file", result.stderr)
+
+    def test_validate_requires_supported_image_magic_bytes(self):
+        signatures = {
+            "png": b"\x89PNG\r\n\x1a\nrest",
+            "jpeg": b"\xff\xd8\xff\xe0rest",
+            "webp": b"RIFF\x04\x00\x00\x00WEBPrest",
+            "gif": b"GIF89arest",
+        }
+        for extension, payload in signatures.items():
+            with self.subTest(extension=extension), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path)
+                data = self.load(path)
+                image = directory / f"fixture.{extension}"
+                image.write_bytes(payload)
+                data["images"][0].update(status="success", file=str(image), qa_label="green")
+                self.save(path, data)
+                self.run_cli("validate", path)
+
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            path = directory / "run.json"
+            self.run_cli("init", path)
+            data = self.load(path)
+            image = directory / "fake.png"
+            image.write_bytes(b"not-an-image")
+            data["images"][0].update(status="success", file=str(image), qa_label="green")
+            self.save(path, data)
+            result = self.run_cli("validate", path, check=False)
+            self.assertIn("PNG/JPEG/WebP/GIF", result.stderr)
             data["images"][0]["file"] = str(directory)
             self.save(path, data)
             result = self.run_cli("validate", path, check=False)
@@ -146,7 +193,7 @@ class ManifestCliTest(unittest.TestCase):
             (lambda d: d["tokens"]["9"].pop("image_key"), "image_key required for card delivery"),
             (lambda d: d["tokens"]["9"].update(file_token="stale"), "must not retain docx or folder evidence"),
             (lambda d: d["delivery"]["docx"].update(token="stale"), "must not retain docx or folder evidence"),
-            (lambda d: d["delivery"]["folder"].update(permalink="https://stale.test"), "must not retain docx or folder evidence"),
+            (lambda d: d["delivery"]["folder"].update(permalink="https://docs.feishu.cn/stale"), "must not retain docx or folder evidence"),
         ]
         for mutate, expected in mutations:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as td:
@@ -160,6 +207,96 @@ class ManifestCliTest(unittest.TestCase):
                 self.save(path, data)
                 result = self.run_cli("validate", path, "--delivery", check=False)
                 self.assertIn(expected, result.stderr)
+
+    def test_delivery_rejects_pending_and_failed_slots(self):
+        for status in ("pending", "failed"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path)
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data)
+                data["images"][0].update(status=status, file=None, qa_label=None)
+                self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertIn(f"status {status} is not final", result.stderr)
+
+    def test_delivery_requires_qa_audit_and_complete_valid_timings(self):
+        mutations = [
+            (lambda d: d["qa"].update(mode="per-image"), "qa.mode"),
+            (lambda d: d["qa"].update(reviewed_at="not-a-time"), "qa.reviewed_at"),
+            (lambda d: d["timings"].pop("wave_1"), "timings.wave_1"),
+            (lambda d: d["timings"]["wave_2"].update(seconds=-1), "finite and >= 0"),
+            (lambda d: d["timings"]["total"].update(seconds=float("nan")), "finite and >= 0"),
+            (lambda d: d["timings"]["total"].update(seconds=4), "at least each wave"),
+        ]
+        for mutate, expected in mutations:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path)
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data)
+                mutate(data)
+                self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertIn(expected, result.stderr)
+
+    def test_delivery_accepts_parallel_total_without_requiring_wave_sum(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            path = directory / "run.json"
+            self.run_cli("init", path)
+            data = self.load(path)
+            self.make_success_files(directory, data)
+            self.mark_delivery_ready(data)
+            self.assertLess(data["timings"]["total"]["seconds"], sum(data["timings"][s]["seconds"] for s in ("wave_0", "wave_1", "wave_2")))
+            self.save(path, data)
+            self.run_cli("validate", path, "--delivery")
+
+    def test_delivery_validates_token_keys_values_urls_and_card_message(self):
+        mutations = [
+            (lambda d: d["tokens"].update(extra={"file_token": "file_unknown_slot"}), "unknown token slot"),
+            (lambda d: d["tokens"]["9"].update(image_key="bad key"), "image_key must be"),
+            (lambda d: d["tokens"]["9"].update(file_token="x"), "file_token must be"),
+            (lambda d: d["delivery"]["docx"].update(token="bad token"), "docx token must be"),
+            (lambda d: d["delivery"]["docx"].update(permalink="http://docs.feishu.cn/docx/x"), "docx permalink"),
+            (lambda d: d["delivery"]["folder"].update(permalink="https://evilfeishu.cn/folder/x"), "folder permalink"),
+            (lambda d: d["delivery"]["card"].update(message_id="x"), "message_id must be"),
+        ]
+        for mutate, expected in mutations:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path)
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data)
+                mutate(data)
+                self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertIn(expected, result.stderr)
+
+    def test_card_rejects_file_token_anywhere_and_rejected_token_fields(self):
+        mutations = [
+            lambda d: d["tokens"].update({"3": {"file_token": "file_stale_rejected"}}),
+            lambda d: d["tokens"].update({"3": {"image_key": "img_stale_rejected"}}),
+        ]
+        for mutate in mutations:
+            with tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path, "--delivery-mode", "card")
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data, rejected={3}, mode="card")
+                mutate(data)
+                self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertRegex(result.stderr, "hard-rejected slot|file_token")
 
     def test_delivery_modes_accept_hard_reject_without_tokens_and_exclude_it(self):
         for mode in ("docx", "card"):

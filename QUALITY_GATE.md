@@ -351,7 +351,7 @@ manifest 必须在初始化时声明 `delivery_mode`（`docx` / `card`，默认 
 
 Agent 在生成 Docx 前必须**先声明本次 Docx 形态**（文案 / 生图 / 全套 / 按需组合），并保证：
 
-- 声明的形态与本次用户请求的输出范围一致（详见 SKILL §5 步骤 5 分流决策表）。
+- 声明的形态与本次用户请求的输出范围一致（详见 SKILL §18.0 通用交付分流规则）。
 - Docx 内一级章节数量、名称、顺序与所声明形态匹配（详见 SKILL §18.7 表格）。
 - 聊天框消息按形态选对分支（文案 Docx 不含 IM 卡片行；生图 / 全套 Docx 含）。
 
@@ -367,7 +367,7 @@ Agent 在生成 Docx 前必须**先声明本次 Docx 形态**（文案 / 生图 
 - 成功槽位必须复用；部分失败只按结构化错误码做单槽位重试，禁止整批重跑。
 - Post-QA 必须九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界仍按 §13.5，🟡 不阻塞交付。
 - 独立读取、内容模块、IM `image_key` 上传可有界并发；同一 Docx 写操作有序，`file_token` 插入按 01→09 执行。
-- 最终统一运行 `python3 scripts/run_manifest.py validate ./run-manifest.json --delivery`：`docx` 模式验收双 token + Docx/目录 + 卡片；`card` 模式验收 `image_key` + 卡片，且禁止残留 `file_token` / Docx / 目录证据。两种模式都不得交付 hard-rejected 槽位。
+- 最终统一运行 `python3 scripts/run_manifest.py validate ./run-manifest.json --delivery`：9 个槽位必须全部为 success 或合法 rejected（pending/failed 一律阻断）；success 文件须有 PNG/JPEG/WebP/GIF magic bytes；QA 须留 `nine-image-single-round` + 非空 ISO `reviewed_at` 审计证据；`wave_0` / `wave_1` / `wave_2` / `total` 耗时须 finite、非负，且 total 不小于任一单波（并行执行，不要求等于三波之和）。`docx` 模式验收格式合理的双 token + 飞书/Lark HTTPS Docx/目录链接 + 卡片；`card` 模式验收格式合理的 `image_key` + `message_id`，且整个 token map 禁止残留任何 `file_token`，未知槽位 key 也拒绝。两种模式的 rejected 槽位都不得有 token 或进入交付集合。
 - `lark-cli` 操作必须先做版本对齐读取与 capability preflight；当前 `media-insert --help` 若支持 `--selection-with-ellipsis`，不得因 reference 滞后删除该有效参数。
 
 ## 16. 失败处理

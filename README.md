@@ -6,14 +6,14 @@
 
 ## v2.7.0 · 全流水线提速（2026-07-14）
 
-v2.7.0 的提速来自执行重排，不来自质量缩水。图生图、参考图池全传、Pre-QA、三段式提示词、默认真人、Post-QA、Docx 与图文卡片交付全部保留。
+v2.7.0 的提速来自执行重排，不来自质量缩水。图生图、参考图池全传、Pre-QA、三段式提示词、默认真人、Post-QA、Docx 与图文卡片交付全部保留。Variant Block、黄图修复建议、ASCII 引号和 `--text-file` 门槛统一沿用 origin/main 中 v2.5 self-review 已确定的 canonical SKILL 语义，不是 v2.7 新降级。
 
 - **三波并行**：Wave 0 准备与合并确认，Wave 1 独立内容模块，Wave 2 生图与交付。独立读取、内容模块和 IM 上传可有界并发；同一 Docx 写操作保持有序。
 - **单一事实源**：`scripts/run_manifest.py init ... --delivery-mode docx|card`（默认 `docx`）统一记录事实、模块、9 个图片槽位、QA、模式对应的 token、状态和阶段耗时。`docx` 模式要求双 token + Docx/目录 + 卡片证据；`card` 模式只要求 `image_key` + 卡片证据，适用于非飞书渠道或拒绝 lark 授权后的退回路径。两种模式都排除 hard reject 且清除其 token。
 - **9 图满并发**：9 张图默认一次提交，`--concurrency 9`，匹配上游 9 并发限制。
 - **增量恢复**：成功槽位不重跑；只按结构化错误码选择失败槽位重试，禁止整批重跑。
 - **批量 QA**：九图单轮批审，只有 🔴 候选二次复核；hard reject / soft pass 边界不变。
-- **流水交付**：目录、Docx 骨架、卡片和独立 IM 上传尽早准备；同一 Docx 图片插入按槽位有序。最终运行 `validate --delivery`：`docx` 验收 `file_token` + `image_key` + Docx/目录 + 卡片，`card` 验收 `image_key` + 卡片且禁止残留 Docx 证据。
+- **流水交付**：目录、Docx 骨架、卡片和独立 IM 上传尽早准备；同一 Docx 图片插入按槽位有序。最终运行 `validate --delivery`：9 槽位只能是 success 或合法 rejected，并验收图片 magic bytes、九图单轮 QA 时间戳、四段合法耗时；`docx` 验收格式合理的 `file_token` + `image_key` + 飞书/Lark HTTPS Docx/目录链接 + 卡片，`card` 验收 `image_key` + 卡片且整个 token map 禁止残留 `file_token`。
 - **lark-cli 能力校验**：先读取与安装版本对齐的 skill/reference，再运行 capability preflight。当前 `media-insert --help` 若支持 `--selection-with-ellipsis` 就保留，不因滞后的嵌入 reference 错删有效参数。
 
 验证：`python3 -m unittest discover -s tests -v`；AgentSkill 校验见下方文件说明。

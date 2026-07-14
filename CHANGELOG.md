@@ -14,11 +14,14 @@
 
 ### 兼容性与质量不变项
 
+- 经与 `origin/main` 的 SKILL 与 CHANGELOG 核对，Variant-Preservation Block 建议化、黄图“≥3 张汇总”规则、ASCII 引号仅手拼命令规避、`--text-file` 不设字符硬阈值，均是 v2.5 self-review 已确定的 canonical SKILL 语义；v2.7 只是统一 QUALITY_GATE 陈旧冲突，不是 v2.7 新降级。
+
 - 保留模块化路由、完整模式门槛、真实性和本地化规则。
 - 保留图生图、产品视觉参考图池全传、Pre-QA 分类路由、三段式提示词、默认真人、Post-QA 报告。
 - 保留 QA 决策辅助原则：只有明显不是产品图的结果 hard reject，产品可辨认但有瑕疵仍 soft pass。
 - 保留飞书 Docx 与图文卡片、每图 `file_token` + `image_key`、latest-per-slot、动态 Docx 章节与聊天框零文案规则。
 - manifest 为新增运行时辅助文件；既有 v2.6.2 slug 与历史目录无需迁移。
+- 最终 `validate --delivery` 现在硬验收 9 槽位终态、PNG/JPEG/WebP/GIF 真实文件头、九图单轮 QA 审计时间、四段 finite 非负耗时、飞书/Lark HTTPS 链接和格式合理的 token/message_id；card 模式全 token map 禁止 `file_token`，未知槽位与 rejected 槽位 token 均拒绝。
 
 ### 验证
 
@@ -151,7 +154,7 @@ v2.6 修根子：把 Docx 章节从「结构模板」改为「输出范围镜像
 
 - **第 15.2 节 Preflight** 升级为两阶段：先用 `command -v` 判存在，再用 `--version` 断言版本。任一 `MISSING` 或 `NEEDS_UPGRADE` 均需用户授权后重装；不得降级绕行。
 - **第 11.2 节**三段式提示词新增可选的 **Variant-Preservation Block**：当本图涉及多个 SKU/颜色变体（多色 flat lay、对比图、套装展示）时强制列举每个变体的颜色 / 位置 / on-body 文字，避免颜色串污或变体数量不对。
-- **第 11.2 节**引入"引号降降"硬约束：prompt 字符串禁用 ASCII `"`。需要强调改用中文 `「」`、`“”` 或 ASCII `'`。避免 batch JSON 语法错误。
+- **第 11.2 节**引入“引号降级”硬约束：prompt 字符串禁用 ASCII `"`。需要强调改用中文 `「」`、`“”` 或 ASCII `'`。避免 batch JSON 语法错误。
 - **第 14.1 节 Post-QA** 每张 🟡 图必须附**修复方式建议**（重出 / PS 后处理 / 遮盖裁剪 / 直接使用 四选一），让用户一眼看到修复路径。
 
 ### Changed

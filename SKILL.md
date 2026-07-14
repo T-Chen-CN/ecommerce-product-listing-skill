@@ -164,7 +164,7 @@ image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 
 - **同一 Docx 写操作有序**：骨架创建完成后，`file_token` 的 media-insert 按槽位 01→09 串行，禁止并发写导致 revision 冲突。不同 Docx 才可并发。
 - Docx 模式：每张可交付图同时记录 `file_token` 与 `image_key`，并记录 Docx、目录和卡片证据。
 - 卡片模式：每张可交付图只要求 `image_key`，不创建也不残留 `file_token`、Docx 或目录证据；仍必须记录卡片发送证据。
-- 两种模式都必须把 hard-rejected 槽位排除在交付集合外，并清除该槽位的 `file_token` / `image_key`。全部完成后统一执行 `validate --delivery`，再按所选模式交付。
+- 两种模式都必须把 hard-rejected 槽位排除在交付集合外，并清除该槽位的 `file_token` / `image_key`。全部完成后统一执行 `validate --delivery`：9 槽位必须全为 success 或合法 rejected，成功文件须有 PNG/JPEG/WebP/GIF 文件头；QA 必须记录 `mode=nine-image-single-round` 与非空 ISO `reviewed_at`；`wave_0`、`wave_1`、`wave_2`、`total` 耗时必须 finite 且非负，total 不小于任一单波（并行时不要求等于三波之和）。通过后再按所选模式交付。
 - 用 `timing` 记录 Wave 2 及总耗时。
 
 ### 五步到三波映射

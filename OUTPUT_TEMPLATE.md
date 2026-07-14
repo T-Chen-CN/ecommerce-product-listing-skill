@@ -453,6 +453,7 @@
 ## 流水线摘要
 
 - 单一事实源：./run-manifest.json（`init --delivery-mode <docx|card>`；默认 docx）
+- 最终验收：9 槽位全为 success 或合法 rejected；success 文件为 PNG/JPEG/WebP/GIF；QA 为 `nine-image-single-round` 且有 ISO `reviewed_at`；timings 含 `wave_0` / `wave_1` / `wave_2` / `total`
 - Wave 0 准备：<秒>（Pre-QA + 合并确认关口）
 - Wave 1 内容：<秒>（独立模块有界并发）
 - Wave 2 生图交付：<秒>（9 张图默认一次提交，--concurrency 9）
