@@ -250,16 +250,16 @@ Post-QA 报告作为文字块随交付卡片一起发出。**不允许用 QA 结
 - Agent 用 QA 结果自动过滤图片而不展示给用户。
 - Agent 声称"生图成功"但没有把 QA 报告一起交付。
 - Agent 因 QA 有 🟡 图而阻塞发货。
-- **🟡 图未带"修复方式建议"字段**（重出 / PS 后处理 / 遮盖裁剪 / 直接使用 四选一）：判为不合格，Agent 必须补齐后再交付。
+- 🟡 图建议逐张附“修复方式建议”字段（重出 / PS 后处理 / 遮盖裁剪 / 直接使用四选一）；当 🟡 图 ≥ 3 张时，未提供汇总建议表才判为不合格。
 
 ### 13.7 图生图其他硬规则（继承 v2.2，并在 v2.4 强化）
 
-- 用 `image-provider-gateway`，且版本 `>= 0.2.0`（支持 `init` 与结构化错误码）。
+- 用 `image-provider-gateway`，且版本 `>= 0.1.0`（支持图生图入口与结构化错误码）。
 - 用 `feishu-tools send-card` 交付，且版本 `>= 0.2.0`（取消了 "> 8 张自动拆卡" 隐式限制）；不走 MEDIA 指令。
-- Preflight 未同时断言 "存在 + 版本" 就开工者，判为不合格。
-- **Prompt 字符串中使用 ASCII 双引号 `"`**（会破坏包含它的 batch JSON 或 shell 命令行）：判为不合格，必须改为 `「」`、`“”` 或 `'`。
-- **本图涉及多个 SKU/颜色变体但 prompt 未包含 Variant-Preservation Block**：判为不合格，必须补上开销、位置、颜色、on-body 文字一一列举后重新生图。
-- 长文本正文用 `--text-file` 而不是 heredoc/多行字符串（包含代码块/反引号/`$` 符号或 > 500 字符时）。
+- Preflight 未同时断言“存在 + capability”就开工者，判为不合格；`image-provider-gateway` 以 `config path` sanity 检查为准。
+- 用 `json.dumps` 生成 JSON 时 ASCII 双引号会自动转义；仅在**手拼 batch JSON 或 shell 单行命令**时建议改用 `「」`、`“”` 或 `'`，不作普通 prompt 的硬门槛。
+- 多 SKU/颜色变体图建议加入 Variant-Preservation Block 并逐项列举位置、颜色、on-body 文字；这是降低串色的建议，不作硬门槛。
+- 长文本正文可用 `--text-file`；正文含代码块、反引号、`$`、多行内容或 shell 转义复杂时建议使用，不设硬字符阈值。
 
 ## 14. 最终评分
 
@@ -287,13 +287,13 @@ Post-QA 报告作为文字块随交付卡片一起发出。**不允许用 QA 结
 
 低于 90 分，必须修正流程后再交付。
 
-## 14. 飞书云文档交付质量门槛（v2.5 新增；v2.6 章节动态化）
+## 15. 飞书云文档交付质量门槛（v2.5 新增；v2.6 章节动态化）
 
 以下门槛只在**飞书渠道 + `lark-cli` 已认证 + 走 Docx 交付路径**时生效。走退回图文卡片路径时不适用。
 
-**v2.6 更新**：Docx 章节列表 = 本次输出范围镜像（详见 SKILL §18.7），下方 §14.3、§14.4 已随之更新；新增 §14.8 Docx 形态断言。
+**v2.6 更新**：Docx 章节列表 = 本次输出范围镜像（详见 SKILL §18.7），下方 §15.3、§15.4 已随之更新；新增 §15.8 Docx 形态断言。
 
-### 14.1 目录路径断言（v2.6.1 简化；v2.6.2 边角断言）
+### 15.1 目录路径断言（v2.6.1 简化；v2.6.2 边角断言）
 
 - 顶层节点必须是 `{agent_name}`，从 `IDENTITY.md` 解析；不得使用硬编码字符串（"唐予安" / "AI助手" 等）。
 - 路径层级必须精确为 `{agent_name}/电商需求/Listing/{slug}/`。缺一层或多一层都是缺陷。
@@ -301,19 +301,19 @@ Post-QA 报告作为文字块随交付卡片一起发出。**不允许用 QA 结
 - `slug` 必须符合 §18.4 v2.6.1 规则：产品身份（品牌型号原样）+ 国家代码（ISO 3166-1 alpha-2 大写）。
 - **v2.6.2 边角断言**：slug 不得以 `-` 开头（意味着品牌型号主体为空）；不得含有原始 whitespace 字符（`\n`、`\t`、`\r`）——它们必须已被 §18.4 规则 3 转成横线。发现即视为不合格。
 
-### 14.2 批次号断言
+### 15.2 批次号断言
 
 - **图片批次**：改哪张哪张 +1，未改的图必须保留原批次号；不得整批同步 +1。
-- **Docx 批次**：每次跑 Skill 都 +1；不得复用同一批次号覆盖旧 Docx。
+- **Docx 批次**：每次**实际生成新 Docx**时 +1；只发卡片、不建 Docx 时不 +1。不得复用同一批次号覆盖旧 Docx。
 - 命名格式：图片 `Main{批次:03d}-{位置:02d}.png` / `SKU{批次:03d}-{位置:02d}.png`；Docx `YYYYMMDD-{slug}-{批次:03d}.docx`。批次前导零必须补足到 3 位，位置补足到 2 位。
 
-### 14.3 Docx 内嵌图片断言（latest-per-slot；仅含图形态）
+### 15.3 Docx 内嵌图片断言（latest-per-slot；仅含图形态）
 
 **仅在生图 Docx / 全套 Docx 形态下适用**（文案 Docx 不含图片，本节不生效）。
 
 对每个位置 `NN`，Docx 内嵌该位置的**最大批次号**图片。混批次内嵌是合规的，不得回退到全部同批次。
 
-### 14.4 Docx 结构完整性断言（v2.6 动态章节）
+### 15.4 Docx 结构完整性断言（v2.6 动态章节）
 
 Docx 一级章节列表**必须与本次输出范围严格一致**（详见 SKILL §18.7 四种典型形态）：
 
@@ -324,16 +324,17 @@ Docx 一级章节列表**必须与本次输出范围严格一致**（详见 SKIL
 
 判定规则：**被本次请求覆盖的每一章必须非空且达到 §7 各模块最低门槛；未被请求的章节不得出现在 Docx 中。**
 
-### 14.5 双 token 上传断言
+### 15.5 分模式 token 上传断言
 
-对每张交付图，Agent 必须持有两个 token：
+manifest 必须在初始化时声明 `delivery_mode`（`docx` / `card`，默认 `docx`）：
 
-- `file_token`（用于 Docx 内嵌）：通过 `lark-cli docs +media-insert`（推荐，一步 shortcut）或 raw `POST /open-apis/drive/v1/medias/upload_all` 获得，用**用户身份**（default `--as user`）。
-- `image_key`（用于 IM 卡片）：通过 `lark-cli im images create --as bot` 获得，**必须 `--as bot`**（用户身份此 API 权限不足）。
+- `docx`：每张可交付图必须同时持有 `file_token` 与 `image_key`；还必须记录 Docx token/permalink、目录 permalink 和卡片发送证据。
+- `card`：每张可交付图只要求 `image_key` 和卡片发送证据；不得要求或残留 `file_token`、Docx token/permalink、目录 permalink。
+- 两种模式下，hard-rejected 槽位都不得进入 `deliverable_slots`，且不得残留该槽位的 `file_token` 或 `image_key`。
 
-两个都持有为合格；只上传一个视为不合格。
+`file_token`（Docx 模式用于内嵌）通过 `lark-cli docs +media-insert`（推荐，一步 shortcut）或 raw `POST /open-apis/drive/v1/medias/upload_all` 获得，用**用户身份**（default `--as user`）。`image_key`（用于 IM 卡片）通过 `lark-cli im images create --as bot` 获得，**必须 `--as bot`**（用户身份此 API 权限不足）。
 
-### 14.6 聊天框消息断言（零文案输出；v2.6 按形态分支）
+### 15.6 聊天框消息断言（零文案输出；v2.6 按形态分支）
 
 飞书云文档交付路径下，聊天框**只发一条消息**，内容按 Docx 形态分支（详见 SKILL §18.9）：
 
@@ -342,21 +343,34 @@ Docx 一级章节列表**必须与本次输出范围严格一致**（详见 SKIL
 
 **共同禁止**：不得在聊天框重复发送任何章节的段落文案内容（标题正文、卖点原文、详情段落、提示词正文等）；这些内容以 Docx 为唯一交付点。
 
-### 14.7 Preflight 授权失败退回断言
+### 15.7 Preflight 授权失败退回断言
 
 `lark: AUTH_MISSING` 且用户拒绝授权时，Agent 必须**明确退回**第 16 章图文卡片路径，不得静默中断本次任务。
 
-### 14.8 Docx 形态断言（v2.6 新增）
+### 15.8 Docx 形态断言（v2.6 新增）
 
 Agent 在生成 Docx 前必须**先声明本次 Docx 形态**（文案 / 生图 / 全套 / 按需组合），并保证：
 
-- 声明的形态与本次用户请求的输出范围一致（详见 SKILL §5 步骤 5 分流决策表）。
+- 声明的形态与本次用户请求的输出范围一致（详见 SKILL §18.0 通用交付分流规则）。
 - Docx 内一级章节数量、名称、顺序与所声明形态匹配（详见 SKILL §18.7 表格）。
 - 聊天框消息按形态选对分支（文案 Docx 不含 IM 卡片行；生图 / 全套 Docx 含）。
 
 形态选错或章节与形态不匹配（例：完整文案模式生成了 11 章 Docx、生图任务只出了文案 Docx）均视为不合格。
 
-## 15. 失败处理
+### 15.9 v2.7 流水线与增量恢复断言
+
+以下全部是加速后的硬门槛，不替代前述任何质量红线：
+
+- manifest 是单一事实源，初始化命令必须显式选择或接受默认 `--delivery-mode docx|card`，并记录事实、模块、9 个槽位、QA、所选模式要求的 token、状态与阶段耗时；Wave 0 合并确认关口后禁止各并发分支自行改事实。
+- 9 张图默认一次提交，命令必须含 `--concurrency 9`；产品视觉参考图池全传、图生图、三段式提示词和默认真人规则不变。
+- 标准命令：`image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240`。
+- 成功槽位必须复用；部分失败只按结构化错误码做单槽位重试，禁止整批重跑。
+- Post-QA 必须九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界仍按 §13.5，🟡 不阻塞交付。
+- 独立读取、内容模块、IM `image_key` 上传可有界并发；同一 Docx 写操作有序，`file_token` 插入按 01→09 执行。
+- 最终统一运行 `python3 scripts/run_manifest.py validate ./run-manifest.json --delivery`：9 个槽位必须全部为 success 或合法 rejected（pending/failed 一律阻断）；success 文件须有 PNG/JPEG/WebP/GIF magic bytes；QA 须留 `nine-image-single-round` + 非空 ISO `reviewed_at` 审计证据；`wave_0` / `wave_1` / `wave_2` / `total` 耗时须 finite、非负，且 total 不小于任一单波（并行执行，不要求等于三波之和）。`docx` 模式验收格式合理的双 token + 飞书/Lark HTTPS Docx/目录链接 + 卡片；`card` 模式验收格式合理的 `image_key` + `message_id`，且整个 token map 禁止残留任何 `file_token`，未知槽位 key 也拒绝。两种模式的 rejected 槽位都不得有 token 或进入交付集合。
+- `lark-cli` 操作必须先做版本对齐读取与 capability preflight；当前 `media-insert --help` 若支持 `--selection-with-ellipsis`，不得因 reference 滞后删除该有效参数。
+
+## 16. 失败处理
 
 只要触发任意不合格条件，Agent 必须：
 

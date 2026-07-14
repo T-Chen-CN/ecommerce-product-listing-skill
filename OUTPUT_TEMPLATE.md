@@ -345,7 +345,7 @@
 
 真实图生图任务按 5 步流程输出，每一步都有固定结构。
 
-### 3.1 步骤 1 㮐输出：信息采集确认
+### 3.1 步骤 1 阶段输出：信息采集确认
 
 ```text
 深入之前请确认以下基本信息：
@@ -359,7 +359,7 @@
 上传图：已收到 <n> 张（列文件名）
 ```
 
-### 3.2 步骤 2 㮐输出：审核补齐与分类路由
+### 3.2 步骤 2 阶段输出：审核补齐与分类路由
 
 ```text
 ## 上传图分类路由
@@ -382,7 +382,7 @@
 - ...
 ```
 
-### 3.3 步骤 3 㮐输出：提议 9 图配比
+### 3.3 步骤 3 阶段输出：提议 9 图配比
 
 ```text
 ## 9 图配比提议（默认含真人）
@@ -402,20 +402,20 @@
 确认方案后开始生图。如需平铺/无模特 / 另外配比直说。
 ```
 
-### 3.4 步骤 4 㮐输出：生图运行报告 (v2.5 补充见 §4)
+### 3.4 步骤 4 阶段输出：生图运行报告 (v2.5 补充见 §4)
 
 ```text
 ## 生图运行
 
 - 参考图池：<n> 张（全传）
 - 提示词模板：三段式（形态锁定 + 产品外观 + 构图）
-- 命令：image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 3 --retry 2 --timeout 240
+- 命令：image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240
 - 运行时长：<mm:ss>
 - 成功/失败：<x>/<y>
 - 失败项 provider_error：<code> <message>（如有）
 ```
 
-### 3.5 步骤 5 㮐输出：交付卡 + Post-QA 报告
+### 3.5 步骤 5 阶段输出：交付卡 + Post-QA 报告
 
 交付卡片正文（传给 `feishu-tools send-card --text-file`）：
 
@@ -441,11 +441,29 @@
 - 图 3：🟡｜logo 拼写错误｜修复建议：PS 后处理
 - ...
 
-标签四选一：🟢 推荐主图 / 🟡 可用但有瑕疵 / 🔴 已剔除（开实不发出）
-修复建议四选一（🟡 图必填）：**重出 / PS 后处理 / 遮盖裁剪 / 直接使用**
+标签四选一：🟢 推荐主图 / 🟡 可用但有瑕疵 / 🔴 已剔除（不应发出）
+修复建议四选一（🟡 图建议逐张填写；🟡 图 ≥ 3 张时必须另附汇总建议表）：**重出 / PS 后处理 / 遮盖裁剪 / 直接使用**
 
 最终重出/接受由你决定，QA 只是参考。
+```
 
+### 3.6 v2.7 三波流水线运行摘要
+
+```text
+## 流水线摘要
+
+- 单一事实源：./run-manifest.json（`init --delivery-mode <docx|card>`；默认 docx）
+- 最终验收：9 槽位全为 success 或合法 rejected；success 文件为 PNG/JPEG/WebP/GIF；QA 为 `nine-image-single-round` 且有 ISO `reviewed_at`；timings 含 `wave_0` / `wave_1` / `wave_2` / `total`
+- Wave 0 准备：<秒>（Pre-QA + 合并确认关口）
+- Wave 1 内容：<秒>（独立模块有界并发）
+- Wave 2 生图交付：<秒>（9 张图默认一次提交，--concurrency 9）
+- 增量恢复：成功槽位 <列表>；单槽位重试 <列表>；禁止整批重跑
+- Post-QA：九图单轮批审；🔴 候选二次复核 <列表>
+- 飞书流水线：docx 模式下 IM 上传可并发、同一 Docx 写操作有序；card 模式只上传 IM
+- 最终验收：两种模式均校验 9 槽位、QA、`image_key`、卡片证据，并排除 hard reject；docx 模式另校验 `file_token`、Docx 与目录证据，card 模式禁止残留这些证据
+```
+
+版本对齐读取后必须执行 `lark-cli docs +media-insert --help` capability preflight。当前 help 若支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。
 
 ## 4. 飞书云文档交付模板（v2.5 新增；v2.6 动态形态）
 

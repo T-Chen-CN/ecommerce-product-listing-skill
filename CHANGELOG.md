@@ -1,3 +1,35 @@
+## v2.7.0 - Full-Pipeline Speedup Without Quality Reduction
+
+**发布日期：** 2026-07-14
+
+### 行为变化
+
+- 5 步业务流程内部重排为 Wave 0 准备、Wave 1 内容、Wave 2 生图交付；独立任务有界并发，同一 Docx 写操作保持有序。
+- 新增标准库工具 `scripts/run_manifest.py`，提供 `init`、`timing`、`select-retry`、`validate`，以单一事实源贯穿事实、模块、9 槽位、QA、双 token、状态与耗时。
+- 9 张图默认一次提交，`--concurrency 9`；不再以 3 并发起步。
+- 部分失败仅按结构化错误码做单槽位重试；成功槽位保留，禁止整批重跑。
+- Post-QA 改为九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界保持不变。
+- 飞书交付改为流水准备：独立 IM 上传可有界并发，同一 Docx 的 `file_token` 插入按槽位有序；最终统一校验双 token、Docx 和图文卡片。
+- `lark-cli` 文档读取改为版本对齐读取 + capability preflight。兼容当前 1.0.68：若 `media-insert --help` 支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。
+
+### 兼容性与质量不变项
+
+- 经与 `origin/main` 的 SKILL 与 CHANGELOG 核对，Variant-Preservation Block 建议化、黄图“≥3 张汇总”规则、ASCII 引号仅手拼命令规避、`--text-file` 不设字符硬阈值，均是 v2.5 self-review 已确定的 canonical SKILL 语义；v2.7 只是统一 QUALITY_GATE 陈旧冲突，不是 v2.7 新降级。
+
+- 保留模块化路由、完整模式门槛、真实性和本地化规则。
+- 保留图生图、产品视觉参考图池全传、Pre-QA 分类路由、三段式提示词、默认真人、Post-QA 报告。
+- 保留 QA 决策辅助原则：只有明显不是产品图的结果 hard reject，产品可辨认但有瑕疵仍 soft pass。
+- 保留飞书 Docx 与图文卡片、每图 `file_token` + `image_key`、latest-per-slot、动态 Docx 章节与聊天框零文案规则。
+- manifest 为新增运行时辅助文件；既有 v2.6.2 slug 与历史目录无需迁移。
+- 最终 `validate --delivery` 现在硬验收 9 槽位终态、PNG/JPEG/WebP/GIF 真实文件头、九图单轮 QA 审计时间、四段 finite 非负耗时、飞书/Lark HTTPS 链接和格式合理的 token/message_id；card 模式全 token map 禁止 `file_token`，未知槽位与 rejected 槽位 token 均拒绝。
+
+### 验证
+
+- 新增文档契约测试与 manifest CLI 单元测试，统一验证版本、围栏、9 并发、质量红线、增量恢复、hard-reject 边界和交付完整性。
+- 标准命令：`python3 -m unittest discover -s tests -v`。
+
+---
+
 # CHANGELOG.md
 
 ## v2.6.2 - Slug Edge Cases: Empty Rejection + Whitespace Normalization
@@ -122,7 +154,7 @@ v2.6 修根子：把 Docx 章节从「结构模板」改为「输出范围镜像
 
 - **第 15.2 节 Preflight** 升级为两阶段：先用 `command -v` 判存在，再用 `--version` 断言版本。任一 `MISSING` 或 `NEEDS_UPGRADE` 均需用户授权后重装；不得降级绕行。
 - **第 11.2 节**三段式提示词新增可选的 **Variant-Preservation Block**：当本图涉及多个 SKU/颜色变体（多色 flat lay、对比图、套装展示）时强制列举每个变体的颜色 / 位置 / on-body 文字，避免颜色串污或变体数量不对。
-- **第 11.2 节**引入"引号降降"硬约束：prompt 字符串禁用 ASCII `"`。需要强调改用中文 `「」`、`“”` 或 ASCII `'`。避免 batch JSON 语法错误。
+- **第 11.2 节**引入“引号降级”硬约束：prompt 字符串禁用 ASCII `"`。需要强调改用中文 `「」`、`“”` 或 ASCII `'`。避免 batch JSON 语法错误。
 - **第 14.1 节 Post-QA** 每张 🟡 图必须附**修复方式建议**（重出 / PS 后处理 / 遮盖裁剪 / 直接使用 四选一），让用户一眼看到修复路径。
 
 ### Changed
@@ -322,7 +354,7 @@ v2.6 修根子：把 Docx 章节从「结构模板」改为「输出范围镜像
 - **飞书云文档交付模式**（SKILL §18）：飞书渠道下，产出统一进 Docx 存储到用户飞书云空间。
   - 目录路径：`/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`。
   - Agent 名从 `IDENTITY.md` 动态解析（SKILL §17），禁止硬编码。
-  - 两套批次计数器：图片逐张独立 +1；Docx 每次跑都 +1。
+  - 两套批次计数器：图片逐张独立 +1；Docx 仅在实际生成新文档时 +1，只发卡片时不 +1。
   - Docx 结构固定 §1-§11：10 段文案 + Post-QA 报告。
   - 图片双 token：云盘 `file_token`（永久，Docx 内嵌）+ IM `image_key`（24h，卡片显示）。
 - **`lark-cli` 硬依赖**（SKILL §15.1）：`@larksuite/cli >= 1.0.0`，飞书渠道必需。
