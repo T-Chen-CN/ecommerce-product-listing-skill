@@ -356,6 +356,19 @@ Agent 在生成 Docx 前必须**先声明本次 Docx 形态**（文案 / 生图 
 
 形态选错或章节与形态不匹配（例：完整文案模式生成了 11 章 Docx、生图任务只出了文案 Docx）均视为不合格。
 
+## 14.9 v2.7 流水线与增量恢复断言
+
+以下全部是加速后的硬门槛，不替代前述任何质量红线：
+
+- manifest 是单一事实源，必须记录事实、模块、9 个槽位、QA、双 token、状态与阶段耗时；Wave 0 合并确认关口后禁止各并发分支自行改事实。
+- 9 张图默认一次提交，命令必须含 `--concurrency 9`；产品视觉参考图池全传、图生图、三段式提示词和默认真人规则不变。
+- 标准命令：`image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240`。
+- 成功槽位必须复用；部分失败只按结构化错误码做单槽位重试，禁止整批重跑。
+- Post-QA 必须九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界仍按 §13.5，🟡 不阻塞交付。
+- 独立读取、内容模块、IM `image_key` 上传可有界并发；同一 Docx 写操作有序，`file_token` 插入按 01→09 执行。
+- 每张交付图必须同时有 `file_token` 与 `image_key`，最终统一运行 manifest 交付校验；Docx 与图文卡片缺一不可。
+- `lark-cli` 操作必须先做版本对齐读取与 capability preflight；当前 `media-insert --help` 若支持 `--selection-with-ellipsis`，不得因 reference 滞后删除该有效参数。
+
 ## 15. 失败处理
 
 只要触发任意不合格条件，Agent 必须：

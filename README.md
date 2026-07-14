@@ -2,7 +2,21 @@
 
 这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
 
-当前版本：**v2.6.2 Slug Edge Cases: Empty Rejection + Whitespace Normalization**
+当前版本：**v2.7.0 Full-Pipeline Speedup Without Quality Reduction**
+
+## v2.7.0 · 全流水线提速（2026-07-14）
+
+v2.7.0 的提速来自执行重排，不来自质量缩水。图生图、参考图池全传、Pre-QA、三段式提示词、默认真人、Post-QA、Docx 与图文卡片交付全部保留。
+
+- **三波并行**：Wave 0 准备与合并确认，Wave 1 独立内容模块，Wave 2 生图与交付。独立读取、内容模块和 IM 上传可有界并发；同一 Docx 写操作保持有序。
+- **单一事实源**：`scripts/run_manifest.py` 统一记录事实、模块、9 个图片槽位、QA、双 token、状态和阶段耗时，避免并发分支事实漂移。
+- **9 图满并发**：9 张图默认一次提交，`--concurrency 9`，匹配上游 9 并发限制。
+- **增量恢复**：成功槽位不重跑；只按结构化错误码选择失败槽位重试，禁止整批重跑。
+- **批量 QA**：九图单轮批审，只有 🔴 候选二次复核；hard reject / soft pass 边界不变。
+- **流水交付**：目录、Docx 骨架、卡片和独立 IM 上传尽早准备；同一 Docx 图片插入按槽位有序，最终以 `file_token` + `image_key` + Docx + 图文卡片统一验收。
+- **lark-cli 能力校验**：先读取与安装版本对齐的 skill/reference，再运行 capability preflight。当前 `media-insert --help` 若支持 `--selection-with-ellipsis` 就保留，不因滞后的嵌入 reference 错删有效参数。
+
+验证：`python3 -m unittest discover -s tests -v`；AgentSkill 校验见下方文件说明。
 
 ## 适用场景
 
@@ -142,6 +156,9 @@ ecommerce-product-listing-skill/
 ├── SKILL.md
 ├── QUALITY_GATE.md
 ├── OUTPUT_TEMPLATE.md
+├── scripts/run_manifest.py
+├── tests/test_run_manifest.py
+├── tests/test_skill_contract.py
 └── CHANGELOG.md
 ```
 

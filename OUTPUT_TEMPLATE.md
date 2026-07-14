@@ -409,7 +409,7 @@
 
 - 参考图池：<n> 张（全传）
 - 提示词模板：三段式（形态锁定 + 产品外观 + 构图）
-- 命令：image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 3 --retry 2 --timeout 240
+- 命令：image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240
 - 运行时长：<mm:ss>
 - 成功/失败：<x>/<y>
 - 失败项 provider_error：<code> <message>（如有）
@@ -445,7 +445,24 @@
 修复建议四选一（🟡 图必填）：**重出 / PS 后处理 / 遮盖裁剪 / 直接使用**
 
 最终重出/接受由你决定，QA 只是参考。
+```
 
+### 3.6 v2.7 三波流水线运行摘要
+
+```text
+## 流水线摘要
+
+- 单一事实源：./run-manifest.json
+- Wave 0 准备：<秒>（Pre-QA + 合并确认关口）
+- Wave 1 内容：<秒>（独立模块有界并发）
+- Wave 2 生图交付：<秒>（9 张图默认一次提交，--concurrency 9）
+- 增量恢复：成功槽位 <列表>；单槽位重试 <列表>；禁止整批重跑
+- Post-QA：九图单轮批审；🔴 候选二次复核 <列表>
+- 飞书流水线：IM 上传可并发；同一 Docx 写操作有序
+- 最终验收：9 槽位 + QA + file_token + image_key + Docx + 图文卡片
+```
+
+版本对齐读取后必须执行 `lark-cli docs +media-insert --help` capability preflight。当前 help 若支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。
 
 ## 4. 飞书云文档交付模板（v2.5 新增；v2.6 动态形态）
 

@@ -1,3 +1,32 @@
+## v2.7.0 - Full-Pipeline Speedup Without Quality Reduction
+
+**发布日期：** 2026-07-14
+
+### 行为变化
+
+- 5 步业务流程内部重排为 Wave 0 准备、Wave 1 内容、Wave 2 生图交付；独立任务有界并发，同一 Docx 写操作保持有序。
+- 新增标准库工具 `scripts/run_manifest.py`，提供 `init`、`timing`、`select-retry`、`validate`，以单一事实源贯穿事实、模块、9 槽位、QA、双 token、状态与耗时。
+- 9 张图默认一次提交，`--concurrency 9`；不再以 3 并发起步。
+- 部分失败仅按结构化错误码做单槽位重试；成功槽位保留，禁止整批重跑。
+- Post-QA 改为九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界保持不变。
+- 飞书交付改为流水准备：独立 IM 上传可有界并发，同一 Docx 的 `file_token` 插入按槽位有序；最终统一校验双 token、Docx 和图文卡片。
+- `lark-cli` 文档读取改为版本对齐读取 + capability preflight。兼容当前 1.0.68：若 `media-insert --help` 支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。
+
+### 兼容性与质量不变项
+
+- 保留模块化路由、完整模式门槛、真实性和本地化规则。
+- 保留图生图、产品视觉参考图池全传、Pre-QA 分类路由、三段式提示词、默认真人、Post-QA 报告。
+- 保留 QA 决策辅助原则：只有明显不是产品图的结果 hard reject，产品可辨认但有瑕疵仍 soft pass。
+- 保留飞书 Docx 与图文卡片、每图 `file_token` + `image_key`、latest-per-slot、动态 Docx 章节与聊天框零文案规则。
+- manifest 为新增运行时辅助文件；既有 v2.6.2 slug 与历史目录无需迁移。
+
+### 验证
+
+- 新增文档契约测试与 manifest CLI 单元测试，统一验证版本、围栏、9 并发、质量红线、增量恢复、hard-reject 边界和交付完整性。
+- 标准命令：`python3 -m unittest discover -s tests -v`。
+
+---
+
 # CHANGELOG.md
 
 ## v2.6.2 - Slug Edge Cases: Empty Rejection + Whitespace Normalization
