@@ -452,14 +452,14 @@
 ```text
 ## 流水线摘要
 
-- 单一事实源：./run-manifest.json
+- 单一事实源：./run-manifest.json（`init --delivery-mode <docx|card>`；默认 docx）
 - Wave 0 准备：<秒>（Pre-QA + 合并确认关口）
 - Wave 1 内容：<秒>（独立模块有界并发）
 - Wave 2 生图交付：<秒>（9 张图默认一次提交，--concurrency 9）
 - 增量恢复：成功槽位 <列表>；单槽位重试 <列表>；禁止整批重跑
 - Post-QA：九图单轮批审；🔴 候选二次复核 <列表>
-- 飞书流水线：IM 上传可并发；同一 Docx 写操作有序
-- 最终验收：9 槽位 + QA + file_token + image_key + Docx + 图文卡片
+- 飞书流水线：docx 模式下 IM 上传可并发、同一 Docx 写操作有序；card 模式只上传 IM
+- 最终验收：两种模式均校验 9 槽位、QA、`image_key`、卡片证据，并排除 hard reject；docx 模式另校验 `file_token`、Docx 与目录证据，card 模式禁止残留这些证据
 ```
 
 版本对齐读取后必须执行 `lark-cli docs +media-insert --help` capability preflight。当前 help 若支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。

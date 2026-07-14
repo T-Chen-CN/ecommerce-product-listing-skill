@@ -304,7 +304,7 @@ Post-QA 报告作为文字块随交付卡片一起发出。**不允许用 QA 结
 ### 15.2 批次号断言
 
 - **图片批次**：改哪张哪张 +1，未改的图必须保留原批次号；不得整批同步 +1。
-- **Docx 批次**：每次跑 Skill 都 +1；不得复用同一批次号覆盖旧 Docx。
+- **Docx 批次**：每次**实际生成新 Docx**时 +1；只发卡片、不建 Docx 时不 +1。不得复用同一批次号覆盖旧 Docx。
 - 命名格式：图片 `Main{批次:03d}-{位置:02d}.png` / `SKU{批次:03d}-{位置:02d}.png`；Docx `YYYYMMDD-{slug}-{批次:03d}.docx`。批次前导零必须补足到 3 位，位置补足到 2 位。
 
 ### 15.3 Docx 内嵌图片断言（latest-per-slot；仅含图形态）
@@ -324,14 +324,15 @@ Docx 一级章节列表**必须与本次输出范围严格一致**（详见 SKIL
 
 判定规则：**被本次请求覆盖的每一章必须非空且达到 §7 各模块最低门槛；未被请求的章节不得出现在 Docx 中。**
 
-### 15.5 双 token 上传断言
+### 15.5 分模式 token 上传断言
 
-对每张交付图，Agent 必须持有两个 token：
+manifest 必须在初始化时声明 `delivery_mode`（`docx` / `card`，默认 `docx`）：
 
-- `file_token`（用于 Docx 内嵌）：通过 `lark-cli docs +media-insert`（推荐，一步 shortcut）或 raw `POST /open-apis/drive/v1/medias/upload_all` 获得，用**用户身份**（default `--as user`）。
-- `image_key`（用于 IM 卡片）：通过 `lark-cli im images create --as bot` 获得，**必须 `--as bot`**（用户身份此 API 权限不足）。
+- `docx`：每张可交付图必须同时持有 `file_token` 与 `image_key`；还必须记录 Docx token/permalink、目录 permalink 和卡片发送证据。
+- `card`：每张可交付图只要求 `image_key` 和卡片发送证据；不得要求或残留 `file_token`、Docx token/permalink、目录 permalink。
+- 两种模式下，hard-rejected 槽位都不得进入 `deliverable_slots`，且不得残留该槽位的 `file_token` 或 `image_key`。
 
-两个都持有为合格；只上传一个视为不合格。
+`file_token`（Docx 模式用于内嵌）通过 `lark-cli docs +media-insert`（推荐，一步 shortcut）或 raw `POST /open-apis/drive/v1/medias/upload_all` 获得，用**用户身份**（default `--as user`）。`image_key`（用于 IM 卡片）通过 `lark-cli im images create --as bot` 获得，**必须 `--as bot`**（用户身份此 API 权限不足）。
 
 ### 15.6 聊天框消息断言（零文案输出；v2.6 按形态分支）
 
@@ -360,13 +361,13 @@ Agent 在生成 Docx 前必须**先声明本次 Docx 形态**（文案 / 生图 
 
 以下全部是加速后的硬门槛，不替代前述任何质量红线：
 
-- manifest 是单一事实源，必须记录事实、模块、9 个槽位、QA、双 token、状态与阶段耗时；Wave 0 合并确认关口后禁止各并发分支自行改事实。
+- manifest 是单一事实源，初始化命令必须显式选择或接受默认 `--delivery-mode docx|card`，并记录事实、模块、9 个槽位、QA、所选模式要求的 token、状态与阶段耗时；Wave 0 合并确认关口后禁止各并发分支自行改事实。
 - 9 张图默认一次提交，命令必须含 `--concurrency 9`；产品视觉参考图池全传、图生图、三段式提示词和默认真人规则不变。
 - 标准命令：`image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240`。
 - 成功槽位必须复用；部分失败只按结构化错误码做单槽位重试，禁止整批重跑。
 - Post-QA 必须九图单轮批审，只有 🔴 候选二次复核；hard reject 与 soft pass 边界仍按 §13.5，🟡 不阻塞交付。
 - 独立读取、内容模块、IM `image_key` 上传可有界并发；同一 Docx 写操作有序，`file_token` 插入按 01→09 执行。
-- 每张交付图必须同时有 `file_token` 与 `image_key`，最终统一运行 manifest 交付校验；Docx 与图文卡片缺一不可。
+- 最终统一运行 `python3 scripts/run_manifest.py validate ./run-manifest.json --delivery`：`docx` 模式验收双 token + Docx/目录 + 卡片；`card` 模式验收 `image_key` + 卡片，且禁止残留 `file_token` / Docx / 目录证据。两种模式都不得交付 hard-rejected 槽位。
 - `lark-cli` 操作必须先做版本对齐读取与 capability preflight；当前 `media-insert --help` 若支持 `--selection-with-ellipsis`，不得因 reference 滞后删除该有效参数。
 
 ## 16. 失败处理

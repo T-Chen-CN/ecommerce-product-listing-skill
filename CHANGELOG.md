@@ -351,7 +351,7 @@ v2.6 修根子：把 Docx 章节从「结构模板」改为「输出范围镜像
 - **飞书云文档交付模式**（SKILL §18）：飞书渠道下，产出统一进 Docx 存储到用户飞书云空间。
   - 目录路径：`/{agent_name}/电商需求/Listing/YYYYMMDD-{slug}/`。
   - Agent 名从 `IDENTITY.md` 动态解析（SKILL §17），禁止硬编码。
-  - 两套批次计数器：图片逐张独立 +1；Docx 每次跑都 +1。
+  - 两套批次计数器：图片逐张独立 +1；Docx 仅在实际生成新文档时 +1，只发卡片时不 +1。
   - Docx 结构固定 §1-§11：10 段文案 + Post-QA 报告。
   - 图片双 token：云盘 `file_token`（永久，Docx 内嵌）+ IM `image_key`（24h，卡片显示）。
 - **`lark-cli` 硬依赖**（SKILL §15.1）：`@larksuite/cli >= 1.0.0`，飞书渠道必需。

@@ -28,7 +28,7 @@ class ManifestCliTest(unittest.TestCase):
             image.write_bytes(b"real temporary image fixture")
             slot.update(status="success", file=str(image), qa_label="green")
 
-    def mark_delivery_ready(self, data, rejected=()):
+    def mark_delivery_ready(self, data, rejected=(), mode="docx"):
         rejected = set(rejected)
         deliverable = []
         for slot in data["images"]:
@@ -37,15 +37,29 @@ class ManifestCliTest(unittest.TestCase):
                 slot.update(status="rejected", file=None, qa_label="red", hard_reject_reason="off_topic")
             else:
                 deliverable.append(n)
-                data["tokens"][str(n)] = {"file_token": f"f{n}", "image_key": f"i{n}"}
+                data["tokens"][str(n)] = {"image_key": f"i{n}"}
+                if mode == "docx":
+                    data["tokens"][str(n)]["file_token"] = f"f{n}"
         data["delivery"] = {
             "deliverable_slots": deliverable,
             "rejected_slots": sorted(rejected),
-            "docx": {"token": "doc-token", "permalink": "https://example.test/docx"},
-            "folder": {"permalink": "https://example.test/folder"},
+            "docx": ({"token": "doc-token", "permalink": "https://example.test/docx"}
+                     if mode == "docx" else {"token": None, "permalink": None}),
+            "folder": ({"permalink": "https://example.test/folder"}
+                       if mode == "docx" else {"permalink": None}),
             "card": {"message_id": "om_123", "send_success": True},
         }
         data["status"] = "ready"
+
+    def test_init_defaults_to_docx_and_accepts_explicit_card_mode(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            default_path = directory / "default.json"
+            card_path = directory / "card.json"
+            self.run_cli("init", default_path)
+            self.run_cli("init", card_path, "--delivery-mode", "card")
+            self.assertEqual(self.load(default_path)["delivery_mode"], "docx")
+            self.assertEqual(self.load(card_path)["delivery_mode"], "card")
 
     def test_init_creates_nine_slots_and_delivery_evidence_shape(self):
         with tempfile.TemporaryDirectory() as td:
@@ -116,18 +130,50 @@ class ManifestCliTest(unittest.TestCase):
             result = self.run_cli("validate", path, check=False)
             self.assertIn("readable regular file", result.stderr)
 
-    def test_delivery_accepts_hard_reject_without_tokens_and_excludes_it(self):
+    def test_card_delivery_requires_only_image_keys_and_card_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             directory = Path(td)
             path = directory / "run.json"
-            self.run_cli("init", path)
+            self.run_cli("init", path, "--delivery-mode", "card")
             data = self.load(path)
             self.make_success_files(directory, data)
-            self.mark_delivery_ready(data, rejected={3})
+            self.mark_delivery_ready(data, mode="card")
             self.save(path, data)
             self.run_cli("validate", path, "--delivery")
-            self.assertNotIn("3", data["tokens"])
-            self.assertNotIn(3, data["delivery"]["deliverable_slots"])
+
+    def test_card_delivery_rejects_missing_image_key_and_forbidden_docx_evidence(self):
+        mutations = [
+            (lambda d: d["tokens"]["9"].pop("image_key"), "image_key required for card delivery"),
+            (lambda d: d["tokens"]["9"].update(file_token="stale"), "must not retain docx or folder evidence"),
+            (lambda d: d["delivery"]["docx"].update(token="stale"), "must not retain docx or folder evidence"),
+            (lambda d: d["delivery"]["folder"].update(permalink="https://stale.test"), "must not retain docx or folder evidence"),
+        ]
+        for mutate, expected in mutations:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path, "--delivery-mode", "card")
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data, mode="card")
+                mutate(data)
+                self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertIn(expected, result.stderr)
+
+    def test_delivery_modes_accept_hard_reject_without_tokens_and_exclude_it(self):
+        for mode in ("docx", "card"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as td:
+                directory = Path(td)
+                path = directory / "run.json"
+                self.run_cli("init", path, "--delivery-mode", mode)
+                data = self.load(path)
+                self.make_success_files(directory, data)
+                self.mark_delivery_ready(data, rejected={3}, mode=mode)
+                self.save(path, data)
+                self.run_cli("validate", path, "--delivery")
+                self.assertNotIn("3", data["tokens"])
+                self.assertNotIn(3, data["delivery"]["deliverable_slots"])
 
     def test_delivery_rejects_red_slot_in_deliverable_set(self):
         with tempfile.TemporaryDirectory() as td:
@@ -145,7 +191,8 @@ class ManifestCliTest(unittest.TestCase):
 
     def test_delivery_requires_dual_tokens_docx_folder_and_card_evidence(self):
         mutations = [
-            (lambda d: d["tokens"]["9"].pop("image_key"), "both file_token and image_key"),
+            (lambda d: d["tokens"]["9"].pop("image_key"), "image_key required for docx delivery"),
+            (lambda d: d["tokens"]["9"].pop("file_token"), "file_token required for docx delivery"),
             (lambda d: d["delivery"]["docx"].pop("token"), "docx token and permalink"),
             (lambda d: d["delivery"]["docx"].pop("permalink"), "docx token and permalink"),
             (lambda d: d["delivery"]["folder"].pop("permalink"), "folder permalink"),

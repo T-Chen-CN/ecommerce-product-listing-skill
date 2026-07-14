@@ -28,8 +28,9 @@ def save(path, data):
 
 def cmd_init(args):
     data = {
-        "schema_version": 2,
+        "schema_version": 3,
         "created_at": now(),
+        "delivery_mode": args.delivery_mode,
         "facts": {"market": args.market, "platform": args.platform, "category": args.category},
         "modules": [],
         "images": [{"slot": n, "status": "pending", "file": None, "provider_error": None,
@@ -132,10 +133,15 @@ def validation_errors(data, delivery):
             errors.append("rejected slots cannot enter the deliverable set")
 
         tokens = data.get("tokens", {})
+        delivery_mode = data.get("delivery_mode")
+        if delivery_mode not in {"docx", "card"}:
+            errors.append("delivery_mode must be docx or card")
         for n in deliverable_slots:
             token = tokens.get(str(n), {})
-            if not token.get("file_token") or not token.get("image_key"):
-                errors.append(f"slot {n}: both file_token and image_key required for delivery")
+            if not token.get("image_key"):
+                errors.append(f"slot {n}: image_key required for {delivery_mode or 'delivery'} delivery")
+            if delivery_mode == "docx" and not token.get("file_token"):
+                errors.append(f"slot {n}: file_token required for docx delivery")
         for n in rejected_slots:
             token = tokens.get(str(n), {})
             if token.get("file_token") or token.get("image_key"):
@@ -143,10 +149,15 @@ def validation_errors(data, delivery):
 
         docx = delivery_state.get("docx") or {}
         folder = delivery_state.get("folder") or {}
-        if not docx.get("token") or not docx.get("permalink"):
-            errors.append("delivery docx token and permalink required")
-        if not folder.get("permalink"):
-            errors.append("delivery folder permalink required")
+        if delivery_mode == "docx":
+            if not docx.get("token") or not docx.get("permalink"):
+                errors.append("delivery docx token and permalink required")
+            if not folder.get("permalink"):
+                errors.append("delivery folder permalink required")
+        elif delivery_mode == "card":
+            has_file_token = any((tokens.get(str(n)) or {}).get("file_token") for n in deliverable_slots)
+            if has_file_token or docx.get("token") or docx.get("permalink") or folder.get("permalink"):
+                errors.append("card delivery must not retain docx or folder evidence")
         # This schema always represents the nine-image pipeline.  A copy-only
         # manifest may use a separate future shape and omit card evidence.
         card = delivery_state.get("card") or {}
@@ -172,6 +183,8 @@ def parser():
     init.add_argument("--market", default=None)
     init.add_argument("--platform", default=None)
     init.add_argument("--category", default=None)
+    init.add_argument("--delivery-mode", choices=("docx", "card"), default="docx",
+                      help="final delivery evidence contract (default: docx)")
     init.set_defaults(func=cmd_init)
     timing = sub.add_parser("timing", help="record a stage duration")
     timing.add_argument("manifest")

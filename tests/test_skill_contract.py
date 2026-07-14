@@ -72,6 +72,13 @@ class SkillContractTest(unittest.TestCase):
         self.assertNotIn("逐张做 Post-QA", joined)
         self.assertNotIn("--concurrency 3", joined)
 
+    def test_delivery_modes_and_docx_batch_rule_are_consistent(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in ["--delivery-mode", "docx", "card", "只发卡片", "hard-rejected"]:
+            self.assertIn(phrase, joined, phrase)
+        self.assertNotIn("每次跑 Skill 都 +1", joined)
+        self.assertNotIn("每次跑都 +1", joined)
+
     def test_quality_gate_heading_numbers_are_unique_and_nested(self):
         headings = re.findall(r"^(#{2,3}) (\d+(?:\.\d+)?)\b", self.gate, re.M)
         level_two = [number for hashes, number in headings if hashes == "##"]
