@@ -337,7 +337,7 @@ Approx size/spec: <合理规格>。
 [Composition Block（本图独有的构图/背景/文字/是否含真人）]
 按 9 图提示词各自的字段填写（是否含真人、主标题、副标题、卖点标签、小字说明、视觉风格、Negative rules）。
 
-[Variant-Preservation Block（可选：本图涉及多个 SKU/颜色变体时必填）]
+[Variant-Preservation Block（可选：本图涉及多个 SKU/颜色变体时建议填写）]
 Multi-variant lineup: strictly N variants side by side. For each variant, preserve:
   - variant #1: color=<name>, position=<left/center/...>, on-body text=<verbatim>
   - variant #2: color=<name>, position=..., on-body text=<verbatim>

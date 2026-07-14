@@ -60,10 +60,37 @@ class SkillContractTest(unittest.TestCase):
         self.assertIn("capability preflight", joined)
         self.assertIn("--selection-with-ellipsis", joined)
 
-    def test_stale_rules_are_absent(self):
-        joined = "\n".join([self.skill, self.gate, self.template])
+    def test_current_rule_semantics_are_explicit_and_legacy_conflicts_absent(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        self.assertRegex(joined, r"image-provider-gateway.{0,120}`?>= 0\.1\.0")
+        self.assertNotRegex("\n".join([self.skill, self.gate]), r"image-provider-gateway.{0,120}`?>= 0\.2\.0")
+        self.assertIn("手拼 batch JSON 或 shell 单行", joined)
+        self.assertIn("不作硬门槛", joined)
+        self.assertIn("🟡 图 ≥ 3 张时", joined)
+        self.assertIn("汇总建议表", joined)
+        self.assertNotIn("🟡 图未带\"修复方式建议\"字段", joined)
         self.assertNotIn("逐张做 Post-QA", joined)
         self.assertNotIn("--concurrency 3", joined)
+
+    def test_quality_gate_heading_numbers_are_unique_and_nested(self):
+        headings = re.findall(r"^(#{2,3}) (\d+(?:\.\d+)?)\b", self.gate, re.M)
+        level_two = [number for hashes, number in headings if hashes == "##"]
+        self.assertEqual(level_two, [str(number) for number in range(1, 17)])
+        self.assertEqual(len(level_two), len(set(level_two)))
+        for hashes, number in headings:
+            if hashes == "###":
+                self.assertIn(number.split(".")[0], level_two)
+
+    def test_readme_marks_v25_as_superseded_history(self):
+        section = self.readme.split("## v2.5", 1)[1].split("## v2.6", 1)[0]
+        self.assertIn("历史说明", section)
+        self.assertIn("已被 v2.6+", section)
+        self.assertIn("不再声称“所有产出统一 Docx”", section)
+        self.assertIn("不要求固定 11 章", section)
+
+    def test_known_template_typos_are_absent(self):
+        self.assertNotIn("㮐输出", self.template)
+        self.assertNotIn("开实不发出", self.template)
 
 
 if __name__ == "__main__":
