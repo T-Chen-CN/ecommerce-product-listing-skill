@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,7 +12,11 @@ CLI = ROOT / "scripts" / "run_manifest.py"
 
 class ManifestCliTest(unittest.TestCase):
     def run_cli(self, *args, check=True):
-        result = subprocess.run([sys.executable, str(CLI), *map(str, args)], text=True, capture_output=True)
+        args=list(map(str,args))
+        mutations={"set-facts","set-image-plan","add-replacement","add-replacement-slot","put-module","update-slot","set-qa","set-token","set-delivery","set-short-delivery-approval","timing","finalize"}
+        if args and args[0] in mutations and len(args)>1 and Path(args[1]).exists() and not any(x in args for x in ("--revision","--from-current")):
+            data=self.load(args[1]);args += ["--manifest-id",data["manifest_id"],"--generation",str(data["generation"]),"--revision",str(data["revision"])]
+        result = subprocess.run([sys.executable, str(CLI), *args], text=True, capture_output=True, env={**os.environ,"RUN_MANIFEST_APPROVAL_REGISTRY":str(Path(args[1]).parent/".approval-registry.json")} if len(args)>1 else None)
         if check and result.returncode:
             self.fail(result.stderr or result.stdout)
         return result
@@ -49,7 +54,9 @@ class ManifestCliTest(unittest.TestCase):
                        if mode == "docx" else {"permalink": None}),
             "card": {"message_id": "om_fixture_message_123", "send_success": True},
         }
-        data["qa"] = {"mode": "nine-image-single-round", "reviewed_at": "2026-07-14T09:30:00+00:00"}
+        final_slots = deliverable + sorted(rejected)
+        data["qa"] = {"mode": "nine-image-single-round", "reviewed_at": "2026-07-14T09:30:00+00:00",
+                      "reviewed_slot_ids": final_slots, "reviewed_count": len(final_slots)}
         data["timings"] = {
             "wave_0": {"seconds": 1.25},
             "wave_1": {"seconds": 5.5},
@@ -220,7 +227,7 @@ class ManifestCliTest(unittest.TestCase):
                 data["images"][0].update(status=status, file=None, qa_label=None)
                 self.save(path, data)
                 result = self.run_cli("validate", path, "--delivery", check=False)
-                self.assertIn(f"status {status} is not final", result.stderr)
+                self.assertIn("pending/failed slots are not final", result.stderr)
 
     def test_delivery_requires_qa_audit_and_complete_valid_timings(self):
         mutations = [
@@ -298,19 +305,19 @@ class ManifestCliTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertRegex(result.stderr, "hard-rejected slot|file_token")
 
-    def test_delivery_modes_accept_hard_reject_without_tokens_and_exclude_it(self):
+    def test_delivery_modes_require_structured_approval_for_short_delivery(self):
         for mode in ("docx", "card"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as td:
-                directory = Path(td)
-                path = directory / "run.json"
+                directory = Path(td); path = directory / "run.json"
                 self.run_cli("init", path, "--delivery-mode", mode)
-                data = self.load(path)
-                self.make_success_files(directory, data)
-                self.mark_delivery_ready(data, rejected={3}, mode=mode)
-                self.save(path, data)
+                data = self.load(path); self.make_success_files(directory, data); self.mark_delivery_ready(data, rejected={3}, mode=mode); self.save(path, data)
+                result = self.run_cli("validate", path, "--delivery", check=False)
+                self.assertIn("structured user approval", result.stderr)
+                self.run_cli("set-short-delivery-approval", path, "--provider", "feishu", "--channel", "direct", "--message-id", "om_fixture", "--author-id", "ou_fixture", "--approval-text", "User explicitly approves current 9->8 short-delivery contract", "--captured-at", "2026-07-15T12:00:00+00:00", "--approved-count", 8)
+                # Legacy fixture is already marked ready, but approval must be consumed by finalize.
+                data=self.load(path);data["status"]="initialized";self.save(path,data)
+                self.run_cli("finalize",path)
                 self.run_cli("validate", path, "--delivery")
-                self.assertNotIn("3", data["tokens"])
-                self.assertNotIn(3, data["delivery"]["deliverable_slots"])
 
     def test_delivery_rejects_red_slot_in_deliverable_set(self):
         with tempfile.TemporaryDirectory() as td:

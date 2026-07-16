@@ -1,3 +1,13 @@
+# Changelog
+
+## v2.8.0
+
+- 图片计划支持 `default_full`、`custom`、`revision` 与动态 `expected_count`；默认完整方案仍为 9 张。
+- hard reject 必须补替代槽位；仅用户明确批准时记录短交付 override。
+- 非中文完整 Docx 默认目标语言原文逐项紧邻中文对照，严格分离 `source_text`、`zh_reference`、`render_text`。
+- manifest schema v4 提供受控 mutation CLI、replacement 谱系、深度 schema 校验、文件锁、保留 mode 的原子替换，以及 manifest_id/generation/revision 冲突防护。
+- 精简主 Skill，将质量细节和长模板按条件拆到辅助文件；运行文档移除版本历史叙事。
+
 ## v2.7.0 - Full-Pipeline Speedup Without Quality Reduction
 
 **发布日期：** 2026-07-14
