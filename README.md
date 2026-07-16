@@ -1,315 +1,40 @@
-# 跨境电商产品上架与本地化内容生产 Skill
+# ecommerce-product-listing-skill
 
-这是一个可复用的 Agent Skill，用于根据产品信息、产品图片、目标国家和销售平台，生成适合直接投入运营使用的跨境电商上架内容。
+当前版本：v2.8.0
 
-当前版本：**v2.7.0 Full-Pipeline Speedup Without Quality Reduction**
+用于跨境电商上架文案、本地化内容、产品图计划、图生图生产、QA 与飞书交付。
 
-## v2.7.0 · 全流水线提速（2026-07-14）
+## 文件
 
-v2.7.0 的提速来自执行重排，不来自质量缩水。图生图、参考图池全传、Pre-QA、三段式提示词、默认真人、Post-QA、Docx 与图文卡片交付全部保留。Variant Block、黄图修复建议、ASCII 引号和 `--text-file` 门槛统一沿用 origin/main 中 v2.5 self-review 已确定的 canonical SKILL 语义，不是 v2.7 新降级。
+- `SKILL.md`：运行判断与关键红线。
+- `QUALITY_GATE.md`：仅在自检、真实生图或交付时读取。
+- `OUTPUT_TEMPLATE.md`：仅在需要具体产物格式时读取。
+- `scripts/run_manifest.py`：动态、并发安全的 manifest 受控 CLI。
+- `CHANGELOG.md`：版本历史。
+- `tests/`：契约与 CLI 测试。
 
-- **三波并行**：Wave 0 准备与合并确认，Wave 1 独立内容模块，Wave 2 生图与交付。独立读取、内容模块和 IM 上传可有界并发；同一 Docx 写操作保持有序。
-- **单一事实源**：`scripts/run_manifest.py init ... --delivery-mode docx|card`（默认 `docx`）统一记录事实、模块、9 个图片槽位、QA、模式对应的 token、状态和阶段耗时。`docx` 模式要求双 token + Docx/目录 + 卡片证据；`card` 模式只要求 `image_key` + 卡片证据，适用于非飞书渠道或拒绝 lark 授权后的退回路径。两种模式都排除 hard reject 且清除其 token。
-- **9 图满并发**：9 张图默认一次提交，`--concurrency 9`，匹配上游 9 并发限制。
-- **增量恢复**：成功槽位不重跑；只按结构化错误码选择失败槽位重试，禁止整批重跑。
-- **批量 QA**：九图单轮批审，只有 🔴 候选二次复核；hard reject / soft pass 边界不变。
-- **流水交付**：目录、Docx 骨架、卡片和独立 IM 上传尽早准备；同一 Docx 图片插入按槽位有序。最终运行 `validate --delivery`：9 槽位只能是 success 或合法 rejected，并验收图片 magic bytes、九图单轮 QA 时间戳、四段合法耗时；`docx` 验收格式合理的 `file_token` + `image_key` + 飞书/Lark HTTPS Docx/目录链接 + 卡片，`card` 验收 `image_key` + 卡片且整个 token map 禁止残留 `file_token`。
-- **lark-cli 能力校验**：先读取与安装版本对齐的 skill/reference，再运行 capability preflight。当前 `media-insert --help` 若支持 `--selection-with-ellipsis` 就保留，不因滞后的嵌入 reference 错删有效参数。
+## 快速验证
 
-验证：`python3 -m unittest discover -s tests -v`；AgentSkill 校验见下方文件说明。
-
-## 适用场景
-
-适用于：
-
-- TikTok Shop / Shopee / Lazada / Amazon / Temu / Shopify 等平台
-- 数码、家居、小家电、美妆个护、服饰配件、日用百货、母婴玩具等消费类产品
-- 标题、卖点、详情、SKU、关键词、规格、包装清单、风险提醒、主图提示词、SKU 图提示词、9 张产品图提示词等内容生产场景
-
-## v2.4 回收修正
-
-v2.4 不重写 v2.3 的任何思路，只修 5 个实战暴露的瑕疵。以下是历史记录；其中版本、引号、Variant block 与黄色建议规则已被 v2.5+ 改写，当前规范以 SKILL / QUALITY_GATE 为准：
-
-1. **当前最低版本**：`image-provider-gateway >= 0.1.0`、`feishu-channel-tools >= 0.2.0`。
-2. **第 15.2 Preflight** 使用“存在 + capability”断言，避免旧版本 CLI 静默过关。
-3. **第 16.1 拆卡描述**：`feishu-tools` v0.2 取消图片张数隐式上限，仅按 25 KiB 字节兜底。
-4. **第 11.2 提示词模板**提供 Variant-Preservation Block 作为建议；ASCII 双引号仅在手拼 JSON / shell 时建议规避，均非硬门槛。
-5. **第 14.1 Post-QA** 建议每张 🟡 图附修复方式；🟡 图 ≥ 3 张时必须提供汇总建议表。
-
-详情见 CHANGELOG.md。
-
-## v2.3 核心优化
-
-### 1. 5 步工作流（替换旧 8 步）
-
-旧版 8 步里的“前置 QA”“后置 QA”“组装报告”三个独立步骤内嵌到新的 5 步里：
-
-1. **收集信息** — 产品信息 + 上传图 + 目标市场/平台
-2. **审核补齐**（内嵌 Pre-QA 分类路由） — 分类图片、提取参数、一次补问缺失信息
-3. **出文案 + 提议生图** — 文案模块 + 9 图配比方案让用户 confirm
-4. **生图** — image-edit 模式、参考图池全传、默认真人使用场景
-5. **交付**（内嵌 Post-QA + 全图发出） — 只剔除“明显不是产品图”，QA 报告作为信息附录
-
-### 2. Agent 多模态自审
-
-Agent 本身是多模态模型，直接看图完成 QA，**不再外调 `image` 视觉子模型**。成本低、延迟小、与主会话上下文一致。
-
-### 3. 参考图分类路由（不是剔除）
-
-用户上传的图分为三类分别使用：
-
-- 🖼️ **产品视觉图**（全传给生图工具，零剔除）
-- 📋 **信息素材图**（参数表/说明书/包装文字面 — 抽取信息写文案，不送去生图）
-- ❓ **无关图**（报告用户确认，不擅自使用）
-
-### 4. 真人使用场景为通用默认
-
-所有类目（服装、3C、家居、美妆、食品、工具、办公、宠物…）默认 9 图中 4-6 张包含真人使用场景，“让买家想象自己在用”是跨类目的转化力锚点。例外必须显式声明（平铺、无模特、被过滤器拦截、产品无法体现使用）。
-
-### 5. Post-QA 只剔除“明显不是产品图”
-
-必须剔除（hard reject）：生成失败 / 损坏 / 严重跑题 / 触发安全过滤器占位图。
-
-必须保留（soft pass）：产品可辨认但有瑕疵（文字错字、手指怪、光照偏色、构图不完美）— 全发出。
-
-### 6. QA 是决策辅助不是卡点
-
-Post-QA 报告随交付卡一起发到用户，列出每张的标签（🟢推荐主图 / 🟡可用但有瑕疵 / 🔴已剔除）+ 观察记录。重出与否由用户决定，Agent 不阻塞发货、不代替用户决策。
-
-## v2.2 能力（保留）
-
-### 1. 产品图生成必须走图生图（image edit）
-
-真实生图必须 `--mode edit` + `--input-image`，禁止纯文生图（除非用户明确要求）。
-
-### 2. 依赖两个外部 CLI 工具
-
-- `image-provider-gateway`：OpenAI-compatible 生图网关，v0.2 支持 `init` 持久化配置 + 结构化错误码
-- `feishu-channel-tools`：飞书交互卡片发送 + inbound 图片查找
-
-两个都通过 `uv tool install git+https://github.com/T-Chen-CN/<repo>` 安装。运行前必须 preflight。
-
-### 3. 图文交付走飞书交互卡片
-
-不使用 OpenClaw 的 MEDIA 指令；`feishu-tools send-card --text-file` 一次性把所有图 + QA 报告打包发出。
-
-## v2.1 能力（保留）
-
-### 1. 从“默认完整输出”升级为“模块化按需输出”
-
-默认按需输出，用户要什么只输出什么，返工只重写点名模块。
-
-### 2. 完整模式仍然保留
-
-如果用户明确要求完整上架内容，仍然会输出固定 10 个板块：
-
-1. 产品定位
-2. 标题建议
-3. 核心卖点
-4. 详情文案
-5. 9 图提示词
-6. SKU 命名
-7. 关键词
-8. 规格参数
-9. 包装清单
-10. 风险提醒
-
-完整模式仍然保留 v2.0 的质量门槛：标题不能过短、卖点不能空泛、详情不能缩水、9 图提示词必须独立完整。
-
-### 3. 质量门槛改为 Scope-aware
-
-v2.1 的质量检查不再默认检查 10 个板块，而是先判断用户本次要求的输出范围：
-
-- 用户只要标题：只检查标题质量
-- 用户只要详情：只检查详情文案质量
-- 用户只要 9 图：只检查 9 图提示词质量
-- 用户要求完整上架内容：才检查完整 10 个板块
-
-这样可以避免“用户只要一个模块，Agent 却因为质量门槛自动补齐全部内容”。
-
-### 4. 支持常用模块单独调用
-
-本 Skill 支持单独或组合调用以下模块：
-
-- 产品定位
-- 标题建议
-- 核心卖点
-- 详情文案
-- 9 图提示词
-- SKU 命名
-- 关键词
-- 规格参数
-- 包装清单
-- 风险提醒
-- 主图提示词
-- SKU 图提示词
-- 视频脚本
-- 达人合作话术
-- 本地化翻译
-- 平台适配优化
-
-## 文件说明
-
-```text
-ecommerce-product-listing-skill/
-├── README.md
-├── SKILL.md
-├── QUALITY_GATE.md
-├── OUTPUT_TEMPLATE.md
-├── scripts/run_manifest.py
-├── tests/test_run_manifest.py
-├── tests/test_skill_contract.py
-└── CHANGELOG.md
+```bash
+python3 -m unittest discover -s tests -v
+python3 ~/.npm-global/lib/node_modules/openclaw/skills/skill-creator/scripts/quick_validate.py .
 ```
 
-- `SKILL.md`：核心 Skill 规则与输出路由
-- `QUALITY_GATE.md`：按需模式、组合模式、完整模式的质量门槛
-- `OUTPUT_TEMPLATE.md`：完整上架模式与模块化输出模板
-- `CHANGELOG.md`：版本迭代记录
+## Manifest 示例
 
-## 推荐调用语句
+```bash
+# 泛化产品图请求：默认完整 9 图
+python3 scripts/run_manifest.py init run.json --plan-mode default_full
 
-### 只产出标题
+# 已确认的 N 图定制任务
+python3 scripts/run_manifest.py init run.json --plan-mode custom --expected-count N --confirmed-by-user
 
-```text
-按照 ecommerce-product-listing-skill，只产出标题建议。
-目标国家：<market>
-平台：<platform>
-产品信息如下：
-……
+# 最终验收
+python3 scripts/run_manifest.py validate run.json --delivery
 ```
 
-### 只产出详情文案
+所有子任务通过 `set-facts`、`set-image-plan`、`add-replacement`、`put-module`、`update-slot`、`set-qa`、`set-token`、`set-delivery`、`finalize` 等子命令更新 manifest，不手改 JSON。
 
-```text
-按照 ecommerce-product-listing-skill，只产出详情文案。
-目标国家：<market>
-平台：<platform>
-产品信息如下：
-……
-```
+## v4 清单与短交付信任边界
 
-### 只产出 9 图提示词
-
-```text
-按照 ecommerce-product-listing-skill，只产出 9 张独立正方形产品图提示词。
-目标国家：<market>
-平台：<platform>
-产品信息如下：
-……
-```
-
-### 真实生成 9 张产品图（图生图 + 飞书卡片交付）
-
-```text
-用生图工具生成 9 张产品图，走图生图模式。
-参考图我已经发在上面 / 用最近一次上传的产品图。
-目标国家：<market>
-平台：<platform>
-```
-
-### 组合输出
-
-```text
-按照 ecommerce-product-listing-skill，只产出：标题建议、详情文案、9 图提示词。
-目标国家：<market>
-平台：<platform>
-产品信息如下：
-……
-```
-
-### 完整输出
-
-```text
-按照 ecommerce-product-listing-skill，输出完整上架内容。
-目标国家：<market>
-平台：<platform>
-产品信息如下：
-……
-```
-
-## 输出原则
-
-- 默认按需输出，不默认全量输出
-- 标题必须具有平台搜索标题的信息密度
-- 详情文案必须是可直接上架的成品
-- 9 图提示词必须具备电商信息图属性
-- 所有提示词必须独立完整，不能互相引用
-- 规则必须跨类目通用，不绑定单一产品类型
-- 不得编写用户未提供的参数、等级、背书或绝对化承诺
-
-
-## v2.5 · 飞书云文档交付主通道（2026-07-12）
-
-> **历史说明：** 本节只记录 v2.5 当时的设计，已被 v2.6+ 的动态交付规则取代或改写。当前规则不再声称“所有产出统一 Docx”，也不要求固定 11 章；请以 SKILL §18 和下方 v2.6+ 章节为准。
-
-v2.5 当时将飞书完整成品的主交付通道调整为 Docx；以下均为历史变更记录。
-
-**当时的变更点（非当前规范）：**
-
-- **新增硬依赖：** `lark-cli`（`@larksuite/cli >= 1.0.0`）。`lark-cli auth status --json` 必须 user identity ready。
-- **新增目录结构：** `/{agent_name}/电商需求/Listing/{slug}/`（v2.6.1 简化：去掉日期前缀）；Agent 名从 `IDENTITY.md` 动态读取，禁止硬编码。
-- **新增两套批次计数器：** 图片 `Main{批次}-{位置}` 逐张独立 +1；Docx `YYYYMMDD-{slug}-{批次}` 仅在实际生成新 Docx 时 +1，只发卡片时不 +1。
-- **新增 Docx 结构：** §1-§10 10 段文案 + §11 Post-QA 报告，共 11 章。
-- **新增图片双 token：** 云盘 `file_token`（永久，用于 Docx 内嵌）+ IM `image_key`（24h，用于卡片）。
-- **交付路径改写：**
-  - 飞书 Docx（主）：10 段文案 + 图片内嵌 + QA 报告
-  - 生图卡片（副）：每张图 + 用途·QA·修复建议
-  - 聊天框：仅 Docx 链接 + 目录链接（零文案输出）
-- **退回路径：** `lark-cli` 未认证且用户拒绝授权时，退回第 16 章图文卡片。
-- **详见：** SKILL §17 §18 / QUALITY_GATE §15 / OUTPUT_TEMPLATE §4。
-
-## v2.6 · Docx 章节 = 输出范围镜像 + 飞书渠道全成品走 Docx（2026-07-12）
-
-v2.6 修 v2.5 两个实战暴露的设计缺陷：
-
-1. **Docx 章节从固定 11 章 → 动态组装**：Docx 内一级章节 = 本次用户实际请求的模块，一一对应。四种典型形态：
-   - **文案 Docx**（9 章）：完整文案模式，本轮未生图
-   - **生图 Docx**（2 章）：纯生图任务，文案已在其他 Docx
-   - **全套 Docx**（11 章）：一次性完成文案 + 生图
-   - **按需/组合 Docx**（变量）：组合模块的完整版交付
-2. **交付分流规则从生图子流程 → 通用交付层**：飞书渠道 + `lark-cli` 已认证时，所有完整成品交付（完整文案 / 生图 / 完整=文案+图 / 组合模块完整交付）都走 Docx；聊天框只发链接。仅单模块小交付、返工修订、用户显式指示时才走聊天框。
-
-**新增：**
-
-- **§0 v2.6 新增原则** 两条（Docx 章节镜像 + 飞书全成品走 Docx）+ **Agent 必须遵守** 编号 11、12。
-- **§18.0 触发条件**：显式列出走 Docx / 不走 Docx 的场景表。
-- **§18.9 聊天框消息**按 Docx 形态分支（文案 Docx 无 IM 卡片行；生图 / 全套 Docx 才加）。
-
-**详见：** SKILL §0 §5 §8.3 §18 / CHANGELOG v2.6.0.
-
-## v2.6.1 · Slug 极简化 = 产品身份 + 国家代码（2026-07-12）
-
-v2.6.1 修 v2.6 slug 规则的过度限制。核心原则：**Slug 是产品身份，不是产品描述**。
-
-**新规则**：
-
-- **产品身份完全按用户原样保留**：不做大小写变换、不做白名单过滤、不做美化。`B48` 就是 `B48`，`iPhone-15-Pro` 就是 `iPhone-15-Pro`。
-- **国家代码用 ISO 3166-1 alpha-2 大写**：`VN` / `US` / `TH` / `BR` / `JP` / `KR` / `DE` / `FR` …
-- **拼接格式**：`{品牌型号原样}-{国家代码}`，例：`B48-VN`、`Anker-Q30-US`。
-- **目录名不再带日期前缀**：日期只出现在 Docx 文件名里。
-- **只删文件系统禁用字符** `/ \\ : * ? " < > |`，其他字符（`_ + . () ! # $ Đ é` 等）全部保留。
-- **变体不进 slug**：颜色（Nude / Đen）、语言（越南语 / 泰语）不影响 slug；同一产品跨颜色跨批次都在同一目录里由 Docx 批次号区分。
-
-**目录结构示例**：
-
-```
-/唐予安/电商需求/Listing/
-├── B48-VN/                       ← 越南版 B48
-│   ├── Main001-01.png
-│   └── 20260712-B48-VN-001.docx
-├── B48-TH/                       ← 泰国版同 B48（独立目录）
-└── Anker-Q30-US/                 ← 美国 Anker Q30
-```
-
-**详见**：SKILL §0（原则 9）§18.1 §18.4 / QUALITY_GATE §15.1 / CHANGELOG v2.6.1.
-
-## v2.6.2 · Slug 边角防呆（2026-07-12）
-
-v2.6.2 补 v2.6.1 slug 规则的两个边角：
-
-- **空品牌型号打回**：如果 Agent 抽不出品牌/型号（用户只说了品类"蓝牙耳机"、纯乱码、或全被删字符），必须打回用户重问，禁止生成 `-VN` 这种残缺目录。
-- **Whitespace 归一**：空格 / tab / 换行 / CR 统一转横线；避免用户从表格粘贴带换行的产品名时 slug 里夹了真换行字符。
-- **Emoji 保留**：符合 v2.6.1 "用户原样"哲学，`B48🎧Pro-VN` 合法。
-
-**详见**：SKILL §0（原则 10）§18.4 / QUALITY_GATE §15.1 / CHANGELOG v2.6.2.
+旧 `schema v3` 运行清单需执行 `init --force` 重建为 v4；generation/revision 保持单调，新清单使用新 identity。短交付消息必须先由可信调用方验证。CLI 的本地 registry 仅以 `(provider, channel, message_id)` 防止本机重复消费，不证明渠道消息或用户身份；默认使用稳定 XDG state 路径，测试可通过 `RUN_MANIFEST_APPROVAL_REGISTRY` 或 `--approval-registry` 隔离。

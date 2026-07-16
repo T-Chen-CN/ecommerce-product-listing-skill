@@ -1,632 +1,163 @@
-# OUTPUT_TEMPLATE.md
+# Ecommerce Product Listing Output Templates
 
-# Ecommerce Product Listing Skill Output Template
+只在需要对应产物时选用，不要求一次加载全部模板。
 
-本文件提供 v2.3 的输出模板。
-
-默认使用【模块化按需输出】。只有用户明确要求“完整上架内容 / 全部内容 / 整套资料 / 全量输出 / 完整上架模式”时，才使用【完整上架模式】。
-
-真实产品图生成任务（图生图 + 内嵌 QA + 飞书卡片交付）使用第 2 章的专用输出模板。
-
-## 0. 未指定输出范围时
-
-如果用户没有明确指定模块，也没有明确要求完整输出，不要直接输出完整上架内容。先让用户选择：
+## 1. 图片计划确认
 
 ```text
-你想先产出哪一部分？
-1. 标题建议
-2. 详情文案
-3. 9 图提示词（文字提示词，非真实图片）
-4. SKU 命名
-5. 关键词
-6. 规格参数 / 包装清单
-7. 产品图生成（真实生成 9 张图，走图生图 + 飞书卡片交付）
-8. 完整上架内容
-```
+图片计划（plan_mode: default_full | custom | revision）
 
-## 1. 按需输出模板
-
-### 1.1 标题建议
-
-```text
-## 标题建议
-
-1. 平台主标题：
-2. SEO 长标题：
-3. 简洁备选标题：
-```
-
-### 1.2 核心卖点
-
-```text
-## 核心卖点
-
-1. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-2. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-3. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-4. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-5. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-6. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-7. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-
-8. 卖点标题：
-   用户利益说明：
-   图片/详情短文案：
-```
-
-### 1.3 详情文案
-
-详情文案必须是可直接复制使用的成品。如果环境支持写作块，用写作块；否则用 Markdown fenced block。
-
-```markdown
-# 产品详情标题
-
-## 为什么选择这款产品
-
-……
-
-## 核心卖点
-
-- ……
-- ……
-- ……
-- ……
-- ……
-
-## 使用场景
-
-- ……
-- ……
-- ……
-- ……
-
-## 适合人群
-
-- ……
-- ……
-- ……
-
-## 规格参数
-
-| 参数 | 内容 |
-|---|---|
-| 品牌 | …… |
-| 型号 | …… |
-| 品类 | …… |
-
-## 包装清单
-
-- ……
-
-## 购买提醒
-
-……
-```
-
-### 1.4 9 图提示词
-
-9 图提示词必须是 9 张独立正方形 1:1 产品图提示词。如果环境支持写作块，用写作块；否则用 Markdown fenced block。
-
-每张图都必须使用以下字段，且 9 张都要独立完整，不能互相引用：
-
-```text
-### 图 X｜图片用途
-- 图片目的：
-- 产品锁定：
-- 是否包含真人：（默认“是，真人使用场景”，内部选项：真人全身 / 真人半身 / 真人手部持握与操作 / 无真人）
-- 画面构图：
-- 背景/场景：
-- 主标题：
-- 副标题：
-- 卖点标签：
-- 小字说明：
-- 视觉风格：
-- Negative rules：
-```
-
-必须明确禁止：九宫格、拼图、3x3 grid、collage、multi-panel layout、same as previous。
-
-默认真人配比（Agent 在提议 9 图时先跟用户 confirm）：
-
-- 主图 1 张：产品棚拍主体（可无人）
-- 真人使用场景 4-6 张：不同角度/场景/使用方式
-- 细节特写 2-3 张：材质/接口/纹理（可无人）
-- 场景/氛围图 0-2 张：使用环境
-
-### 1.5 SKU 命名
-
-```text
-## SKU 命名
-
-1. SKU：
-   基础名：
-   高级名：
-   平台显示名：
-
-2. SKU：
-   基础名：
-   高级名：
-   平台显示名：
-```
-
-必须覆盖用户提供的全部颜色 / 款式 / 版本。
-
-### 1.6 关键词
-
-```text
-## 关键词
-
-品类关键词：
-1.
-2.
-3.
-4.
-5.
-
-功能关键词：
-1.
-2.
-3.
-4.
-5.
-
-场景关键词：
-1.
-2.
-3.
-4.
-5.
-
-人群 / 需求关键词：
-1.
-2.
-3.
-4.
-
-规格 / 属性关键词：
-1.
-2.
-3.
-4.
-5.
-
-本地化搜索关键词：
-1.
-2.
-3.
-4.
-5.
-6.
-```
-
-### 1.7 规格参数
-
-```markdown
-## 规格参数
-
-| 参数 | 内容 |
-|---|---|
-| 品牌 |  |
-| 型号 |  |
-| 品类 |  |
-| 颜色 / SKU |  |
-| 材质 |  |
-| 尺寸 |  |
-| 容量 |  |
-| 功率 |  |
-| 接口 |  |
-| 版本 |  |
-| 电池 / 续航 |  |
-| 操作方式 |  |
-| 包装内容 |  |
-| 适用场景 |  |
-```
-
-没有提供的信息写“未提供 / 需确认”，不要猜测。
-
-### 1.8 包装清单
-
-```text
-## 包装清单
-
-1.
-2.
-3.
-```
-
-如果包装不明确，写“未提供完整包装清单 / 需以实际发货包装为准”。
-
-### 1.9 风险提醒
-
-```text
-## 风险提醒
-
-1.
-2.
-3.
-```
-
-只写真实上架风险，不写泛泛免责声明。
-
-### 1.10 主图提示词
-
-```text
-## 主图提示词
-
-- 图片目的：
-- 产品锁定：
-- 是否包含真人：
-- 画面构图：
-- 背景/场景：
-- 主标题：
-- 副标题：
-- 卖点标签：
-- 小字说明：
-- 视觉风格：
-- Negative rules：
-```
-
-### 1.11 SKU 图提示词
-
-```text
-## SKU 图提示词
-
-### SKU 1｜颜色 / 款式名
-- 图片目的：
-- 产品锁定：
-- 统一布局：
-- 画面构图：
-- 背景/场景：
-- 显示文字：
-- 视觉风格：
-- Negative rules：
-
-### SKU 2｜颜色 / 款式名
-- 图片目的：
-- 产品锁定：
-- 统一布局：
-- 画面构图：
-- 背景/场景：
-- 显示文字：
-- 视觉风格：
-- Negative rules：
-```
-
-必须强调同一布局、同一角度、同一构图，只改变颜色 / 款式，不改变产品结构。
-
-## 2. 完整上架模式输出模板
-
-仅当用户明确要求完整上架内容时，按以下顺序输出：
-
-1. 产品定位
-2. 标题建议
-3. 核心卖点
-4. 详情文案
-5. 9 图提示词
-6. SKU 命名
-7. 关键词
-8. 规格参数
-9. 包装清单
-10. 风险提醒
-
-完整模式中的每个板块，使用上方对应模块模板。
-
-**层级序号规范（SKILL §17.4）：**
-
-- 一级章节（h2）：`一、` / `二、` / … / `十、` / `十一、`
-- 二级小节（h3）：`（一）` / `（二）` / …
-- 三级子项（h4）：`1.` / `2.` / …
-- 四级子子项（h5）：`1.1` / `1.2` / …
-- h1 保留给 Docx 主标题；附录、元信息用文字标记（`附录：`）不占序号槽位。
-
-完整交付到飞书云文档（v2.5）时，一级章节从 `一、` 起编，各级独立重置，详见 SKILL §17.4 + §18.7。
-
-## 3. 真实产品图生成任务输出模板（v2.3 新增）
-
-真实图生图任务按 5 步流程输出，每一步都有固定结构。
-
-### 3.1 步骤 1 阶段输出：信息采集确认
-
-```text
-深入之前请确认以下基本信息：
-
-- 目标市场 <market>：
-- 目标平台 <platform>：
-- 产品类目 <category>：
-- 需要张数（默认 9 张）：
-- 完成时限 / 质量档（high / low）：
-
-上传图：已收到 <n> 张（列文件名）
-```
-
-### 3.2 步骤 2 阶段输出：审核补齐与分类路由
-
-```text
-## 上传图分类路由
-
-| 序号 | 文件名 | 分类 | 一句话说明 | 用途 |
+| 槽位 | 图型/用途 | 核心卖点 | 是否真人 | 备注 |
 |---|---|---|---|---|
-| 1 |  | 🖼️ 产品视觉图 |  | 进参考池 |
-| 2 |  | 🖼️ 产品视觉图 |  | 进参考池 |
-| 3 |  | 📋 信息素材图 |  | 抽取尺码表 |
-| 4 |  | ❓ 无关图 |  | 需用户确认 |
+| 01 |  |  |  |  |
 
-产品参数（已提取 / 待确认）：
-- 颜色：
-- 尺寸/规格：
-- 材质：
-- 包装内容：
-- ...
-
-缺失信息（需补齐，不阻塞）：
-- ...
+总数：N 张（expected_count=N）
+请一次确认以上清单与总数；确认后开始生产。
 ```
 
-### 3.3 步骤 3 阶段输出：提议 9 图配比
+用户仅泛化要求做产品图时，使用 default_full 默认完整方案 9 张。SKU 图、指定卖点图、指定图型或返工按明确数量生成；数量不明时使用上表确认。
 
-```text
-## 9 图配比提议（默认含真人）
+## 2. 本地化内容单元
 
-| # | 类型 | 是否含真人 | 图片目的 |
-|---|---|---|---|
-| 1 | 主图 | 否 | 产品棚拍主体 |
-| 2 | 真人使用场景 | 是（全身） | ... |
-| 3 | 真人使用场景 | 是（手部持握） | ... |
-| 4 | 真人使用场景 | 是（半身） | ... |
-| 5 | 真人使用场景 | 是 | ... |
-| 6 | 细节特写 | 否 | 材质纹理 |
-| 7 | 细节特写 | 否 | 接口结构 |
-| 8 | 场景图 | 可选 | 使用环境 |
-| 9 | 卖点图 | 可选 | 包装开盒 |
-
-确认方案后开始生图。如需平铺/无模特 / 另外配比直说。
-```
-
-### 3.4 步骤 4 阶段输出：生图运行报告 (v2.5 补充见 §4)
-
-```text
-## 生图运行
-
-- 参考图池：<n> 张（全传）
-- 提示词模板：三段式（形态锁定 + 产品外观 + 构图）
-- 命令：image-provider-gateway batch --requests <json> --output-dir <dir> --concurrency 9 --retry 2 --timeout 240
-- 运行时长：<mm:ss>
-- 成功/失败：<x>/<y>
-- 失败项 provider_error：<code> <message>（如有）
-```
-
-### 3.5 步骤 5 阶段输出：交付卡 + Post-QA 报告
-
-交付卡片正文（传给 `feishu-tools send-card --text-file`）：
+非中文市场完整 Docx 默认每项紧邻展示：
 
 ```markdown
-**<品牌 / 型号> · <张数> 图产出** 🌸
+### <项目名>
+<source_text：目标语言原文>
 
-- 目标市场：<market>
-- 平台：<platform>
-- 生图模式：图生图（image edit）
-- 参考图池：<n> 张（<文件名列表>）
-- 生图模型：<model 名> / <size> / <quality>
-
-## Post-QA 摘要
-
-- 🟢 推荐主图：<n> 张（<图号列表>）
-- 🟡 可用但有瑕疵：<n> 张（<图号列表>）
-- 🔴 已剔除：<n> 张（<图号列表 + 剔除原因>）
-
-## 逐张观察
-
-- 图 1：🟢｜<一句话观察>｜无瑕疵｜修复建议：直接使用
-- 图 2：🟡｜<一句话观察>｜瑕疵：手指数量不对｜修复建议：重出 / revision_prompt_hint: ...
-- 图 3：🟡｜logo 拼写错误｜修复建议：PS 后处理
-- ...
-
-标签四选一：🟢 推荐主图 / 🟡 可用但有瑕疵 / 🔴 已剔除（不应发出）
-修复建议四选一（🟡 图建议逐张填写；🟡 图 ≥ 3 张时必须另附汇总建议表）：**重出 / PS 后处理 / 遮盖裁剪 / 直接使用**
-
-最终重出/接受由你决定，QA 只是参考。
+**中文对照：** <zh_reference>
 ```
 
-### 3.6 v2.7 三波流水线运行摘要
+机器数据：
+
+```json
+{
+  "source_text": "目标语言原文",
+  "zh_reference": "逐项紧邻中文对照",
+  "render_text": "实际发布或图片渲染文字"
+}
+```
+
+显式要求单语时省略中文展示；中文市场不重复。中文对照不得传入生图 prompt，图片 prompt 只读取 `render_text`。
+
+## 3. 动态图片提示词
+
+每个槽位独立填写，不使用“同上”：
 
 ```text
-## 流水线摘要
+### 槽位 NN｜图片用途
+[Reference-Fidelity Block]
+- 参考图池全传；锁定产品形态、结构、颜色和标识。
 
-- 单一事实源：./run-manifest.json（`init --delivery-mode <docx|card>`；默认 docx）
-- 最终验收：9 槽位全为 success 或合法 rejected；success 文件为 PNG/JPEG/WebP/GIF；QA 为 `nine-image-single-round` 且有 ISO `reviewed_at`；timings 含 `wave_0` / `wave_1` / `wave_2` / `total`
-- Wave 0 准备：<秒>（Pre-QA + 合并确认关口）
-- Wave 1 内容：<秒>（独立模块有界并发）
-- Wave 2 生图交付：<秒>（9 张图默认一次提交，--concurrency 9）
-- 增量恢复：成功槽位 <列表>；单槽位重试 <列表>；禁止整批重跑
-- Post-QA：九图单轮批审；🔴 候选二次复核 <列表>
-- 飞书流水线：docx 模式下 IM 上传可并发、同一 Docx 写操作有序；card 模式只上传 IM
-- 最终验收：两种模式均校验 9 槽位、QA、`image_key`、卡片证据，并排除 hard reject；docx 模式另校验 `file_token`、Docx 与目录证据，card 模式禁止残留这些证据
+[Product-Appearance Block]
+- 产品：
+- 已确认变体：
+- 材质/结构事实：
+
+[Composition Block]
+- 是否包含真人：
+- 构图与背景：
+- render_text 主标题：
+- render_text 副标题：
+- render_text 卖点标签：
+- Negative rules：禁止九宫格、拼图、3x3 grid、collage、multi-panel layout。
 ```
 
-版本对齐读取后必须执行 `lark-cli docs +media-insert --help` capability preflight。当前 help 若支持 `--selection-with-ellipsis`，即使嵌入 reference 滞后也保留该有效参数。
+多 SKU 可增加 Variant-Preservation Block，不作硬门槛。
 
-## 4. 飞书云文档交付模板（v2.5 新增；v2.6 动态形态）
+## 4. Manifest 命令
 
-以下模板仅在**飞书渠道 + `lark-cli` 已认证 + 走 Docx 交付路径**下使用。
+先 init。旧 `schema v3` 运行清单不能直接 mutation/validate，必须用 `init --force` 重建为 v4；重建保留 generation/revision 单调递增，但会生成新的 manifest identity。
 
-### 4.1 Preflight 未认证时的询问语（复用于 §18.2）
+```bash
+python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr
+python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-mode docx
+python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count 3 --confirmed-by-user
+python3 scripts/run_manifest.py init run-manifest.json --force --task-scope image --plan-mode default_full
+```
+
+所有 mutation 都必须携带同一次读取所得的完整 identity。以下 shell helper 在**每次 mutation 前**读取当前 `manifest_id` / `generation` / `revision`，所以示例可直接执行；每次成功 mutation 会令 revision 递增，下一次调用会自动读取新 revision。
+
+```bash
+manifest_mutate() {
+  command="$1"; manifest="$2"; shift 2
+  eval "$(python3 - "$manifest" <<'PY'
+import json, shlex, sys
+m=json.load(open(sys.argv[1], encoding="utf-8"))
+print("MID="+shlex.quote(m["manifest_id"]))
+print("GEN="+shlex.quote(str(m["generation"])))
+print("REV="+shlex.quote(str(m["revision"])))
+PY
+)"
+  python3 scripts/run_manifest.py "$command" "$manifest" "$@" \
+    --manifest-id "$MID" --generation "$GEN" --revision "$REV"
+}
+
+manifest_mutate set-facts run-manifest.json --json '{"market":"TH"}'
+manifest_mutate set-image-plan run-manifest.json --json '[{"slot":1,"purpose":"hero"}]'
+manifest_mutate put-module run-manifest.json title --module-kind internal --json '{"note":"draft"}'
+manifest_mutate update-slot run-manifest.json 1 --json '{"status":"failed"}'
+manifest_mutate set-qa run-manifest.json --json '{"mode":"9-image-single-round","reviewed_at":null,"reviewed_slot_ids":[],"reviewed_count":0}'
+manifest_mutate set-token run-manifest.json 1 --json '{"image_key":"image_fixture"}'
+manifest_mutate set-delivery run-manifest.json --json '{"deliverable_slots":[]}'
+manifest_mutate timing run-manifest.json wave_0 --seconds 1.0
+manifest_mutate add-replacement-slot run-manifest.json --replaces-slot 1 --purpose "替代槽位用途"
+```
+
+`put-module --from-current` 和 `timing --from-current` 只允许创建不存在的字段；同名模块或同 stage timing 拒绝盲覆盖。
+
+短交付只有可信调用方验证渠道消息真实性与用户身份后才录入。审批原文必须以数字边界精确包含当前 `N->M`。本地 registry 只保证同一 `(provider, channel, message_id)` 在本机唯一消费，不证明外部消息真实性；默认路径稳定在 XDG state 目录，测试/隔离运行可用 `RUN_MANIFEST_APPROVAL_REGISTRY` 或 `--approval-registry` 指定。
+
+```bash
+export RUN_MANIFEST_APPROVAL_REGISTRY="$PWD/.test-short-approval-registry.json"
+manifest_mutate set-short-delivery-approval run-manifest.json \
+  --provider feishu --channel direct --message-id om_123456 --author-id ou_123456 \
+  --approval-text "用户明确批准当前 9->8 短交付合同" \
+  --captured-at 2026-07-16T09:00:00+08:00 --approved-count 8
+manifest_mutate finalize run-manifest.json
+python3 scripts/run_manifest.py validate run-manifest.json --delivery
+```
+
+## 5. 流水线摘要
 
 ```text
-🔐 lark-cli 未认证
-
-飞书云文档交付需要 lark-cli 用户身份 ready。要现在授权吗？
-
-  是 → 我发授权链接给你扫码，扫完继续走 Docx 交付
-  否 → 本次退回图文卡片模式（不建 Docx）
-
-（不设超时，你随时回都行）
+- 单一事实源：run-manifest.json
+- 计划：<plan_mode>；验收：<actual>/<expected_count>（N/N）
+- Wave 0：Pre-QA、能力预检、合并确认关口
+- Wave 1：内容模块与三段式 prompt
+- Wave 2：图生图、单槽位重试、single-round Post-QA、交付
+- 增量恢复：成功槽位复用，禁止整批重跑
+- QA：默认 9 图为九图单轮批审；🔴 候选二次复核
+- Docx：同一 Docx 写操作有序
 ```
 
-### 4.2 目录创建广播语
-
-```text
-📂 产品目录已就绪：
-  路径：/{agent_name}/电商需求/Listing/{slug}/
-  状态：{已存在，复用 | 新建}
-  首次创建日：{原 YYYYMMDD}
-```
-
-### 4.3 Docx 内嵌结构（v2.6 按形态选模板）
-
-Docx 一级章节列表 = 本次输出范围镜像（详见 SKILL §18.7 四种典型形态）。**编号规则**：一级章节从 `一、` 起本地编号，不跟随 SKILL.md §1-§11 槽位。
-
-#### 形态 A：文案 Docx（9 章，本轮未生图）
+## 6. Post-QA
 
 ```markdown
-# {品牌} {型号} 上架内容（{批次:03d}）
+## Post-QA
 
-## 一、标题建议
-（3 组标题）
+- 🟢：<槽位列表>
+- 🟡：<槽位列表>
+- 🔴 hard reject：<槽位 + 原因 + 替代槽位>
+- 交付结果：N/N
+- structured short-delivery approval：无 | <已绑定当前 N→M 合同的 evidence digest>
 
-## 二、核心卖点
-（8 条）
-
-## 三、详情文案
-（7 小节，h3 用 （一）...（七））
-
-## 四、9 图提示词
-（三段式）
-
-## 五、SKU 命名
-（覆盖全颜色/版本）
-
-## 六、关键词
-（30+ 关键词）
-
-## 七、规格参数
-
-## 八、包装清单
-
-## 九、风险提醒
+逐槽位：
+- NN｜🟢/🟡/🔴｜观察｜修复建议：重出 / PS 后处理 / 遮盖裁剪 / 直接使用
 ```
 
-#### 形态 B：生图 Docx（2 章，纯生图任务）
+hard reject 必须补齐替代槽位；未补齐时不能把 N-1/N 当完成。
 
-```markdown
-# {品牌} {型号} 产品图（{批次:03d}）
+## 7. Docx / 图文卡片分流
 
-## 一、图片汇总
+- **docx**：完整成品默认 Docx；每个可交付图记录 `file_token` + `image_key`，并记录 Docx、目录、卡片证据。
+- **card**：只发卡片；只记录 `image_key`，不得残留 `file_token`、Docx 或目录证据。
+- 飞书操作前先做版本对齐读取与 capability preflight；支持时使用 `--selection-with-ellipsis`。
 
-### （一）图 1 · 主图
-[图片块：Main{批次:03d}-01.png]
-
-### （二）图 2 · 白底细节
-[图片块：Main{批次:03d}-02.png]
-
-...
-
-## 二、Post-QA 报告
-- 🟢 推荐主图：X 张（图 01, 03, 05）
-- 🟡 可用但有瑕疵：Y 张（图 02, 04...）
-- 🔴 已剔除：Z 张
-
-逐图诊断：
-- 图 01：🟢｜白底纯净、logo 清晰｜修复建议：直接使用
-- 图 02：🟡｜文字微模糊｜修复建议：PS 后处理
-```
-
-#### 形态 C：全套 Docx（11 章，一次性完成文案 + 生图）
-
-```markdown
-# {品牌} {型号} 完整上架包（{批次:03d}）
-
-## 一、标题建议
-## 二、核心卖点
-## 三、详情文案
-## 四、9 图提示词
-## 五、SKU 命名
-## 六、关键词
-## 七、规格参数
-## 八、包装清单
-## 九、风险提醒
-
-## 十、图片汇总
-### （一）图 1 · 主图
-[图片块]
-...（余下 8 个位置）...
-
-## 十一、Post-QA 报告
-（同形态 B）
-```
-
-#### 形态 D：按需/组合 Docx（变量章节）
-
-按用户点名顺序（或按完整模式相对顺序），从 `一、` 起本地编号。示例：用户点了"标题 + 详情 + 9 图 + 9 图提示词"：
-
-```markdown
-# {品牌} {型号} 组合模块（{批次:03d}）
-
-## 一、标题建议
-## 二、详情文案
-## 三、9 图提示词
-## 四、图片汇总
-### （一）图 1 · 主图
-...
-## 五、Post-QA 报告
-```
-
-### 4.4 生图卡片（图旁 caption）
-
-每张图的 caption 三行固定格式：
+Docx 链接消息：
 
 ```text
-Main{批次:03d}-{位置:02d} · {本图用途}
-{🟢/🟡/🔴} QA：{观察}
-修复建议：{重出 / PS / 遮盖裁剪 / 直接使用}
+📄 完整版：<docx-permalink>
+📁 产品文件夹：<folder-permalink>
+🖼 图文卡片：已发送
 ```
-
-例：
-
-```text
-Main001-01 · 主图（白底斜俯视 + 3 色一字排开）
-🟢 QA：产品可辨认、logo 清晰、无跑题
-修复建议：直接使用
-```
-
-### 4.5 聊天框消息（Docx 生成完毕后唯一一条；v2.6 按形态分支）
-
-**文案 Docx**（无图，无 IM 卡片行）：
-
-```text
-📄 完整版：{docx-permalink}
-📁 产品文件夹：{folder-permalink}
-```
-
-**生图 / 全套 Docx**（含图，含 IM 卡片行 + QA 摘要）：
-
-```text
-📄 完整版：{docx-permalink}
-📁 产品文件夹：{folder-permalink}
-🖼 生图卡片见 {上/下} 条
-
-（本次生成 {N} 张图，Post-QA：🟢 {n1} / 🟡 {n2} / 🔴 {n3}；详见 Docx 相应章节）
-```
-
-**按需/组合 Docx**：按是否含图选上面对应分支。
-
-**禁止**在此消息中重复 10 段文案任何段落。文案唯一交付点是 Docx。

@@ -20,9 +20,10 @@ class SkillContractTest(unittest.TestCase):
         self.assertIsNotNone(match)
         frontmatter = match.group(1)
         self.assertRegex(frontmatter, r"(?m)^name: ecommerce-product-listing-skill$")
-        self.assertRegex(frontmatter, r'(?m)^description: ".*v2\.7\.0.*"$')
+        self.assertRegex(frontmatter, r'(?m)^description: "Use when .*"$')
+        self.assertNotRegex(frontmatter, r'(?m)^description: .*v2\.8\.0')
         self.assertNotRegex(frontmatter, r"(?m)^version:")
-        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.7\.0\"$")
+        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.8\.0\"$")
 
     def test_markdown_fences_are_balanced(self):
         for name in DOCS + ["README.md", "CHANGELOG.md"]:
@@ -31,13 +32,16 @@ class SkillContractTest(unittest.TestCase):
 
     def test_version_is_consistent(self):
         for name, text in [("SKILL", self.skill), ("README", self.readme), ("CHANGELOG", self.changelog)]:
-            self.assertIn("v2.7.0", text, name)
+            self.assertRegex(text, r"v?2\.8\.0", name)
 
-    def test_nine_image_default_is_full_concurrency(self):
+    def test_default_full_is_nine_images_but_custom_count_is_dynamic(self):
         joined = "\n".join([self.skill, self.gate, self.template])
-        self.assertGreaterEqual(joined.count("--concurrency 9"), 3)
-        self.assertNotIn("--concurrency 3", joined)
-        self.assertIn("9 张图默认一次提交", joined)
+        self.assertIn("default_full", joined)
+        self.assertIn("expected_count", joined)
+        self.assertIn("custom", joined)
+        self.assertIn("revision", joined)
+        self.assertIn("默认完整方案 9 张", joined)
+        self.assertNotIn("9 槽位必须", joined)
 
     def test_quality_red_lines_remain(self):
         joined = "\n".join([self.skill, self.gate, self.template])
@@ -72,23 +76,32 @@ class SkillContractTest(unittest.TestCase):
         self.assertNotIn("逐张做 Post-QA", joined)
         self.assertNotIn("--concurrency 3", joined)
 
-    def test_v27_preserves_origin_main_v25_canonical_relaxations(self):
+    def test_core_relaxations_remain_without_version_history_narrative(self):
         joined = "\n".join([self.skill, self.gate, self.readme, self.changelog])
         for phrase in [
-            "v2.5 self-review", "canonical SKILL", "不是 v2.7 新降级",
-            "Variant-Preservation Block", "不作硬门槛", "不设硬字符阈值",
+"Variant-Preservation Block", "不作硬门槛", "不设硬字符阈值",
             "ASCII 双引号会自动转义", "🟡 图 ≥ 3 张时",
         ]:
             self.assertIn(phrase, joined, phrase)
 
+    def test_mutation_examples_carry_full_identity_and_registry_trust_boundary(self):
+        joined="\n".join([self.skill,self.gate,self.template,self.readme])
+        self.assertIn("manifest_mutate()",self.template)
+        for phrase in ("--manifest-id", "--generation", "--revision", "每次 mutation", "RUN_MANIFEST_APPROVAL_REGISTRY", "可信调用方", "schema v3", "--force"):
+            self.assertIn(phrase,joined)
+        self.assertNotIn("approved_by=user",self.gate)
+
     def test_manifest_final_acceptance_evidence_is_documented(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
         for phrase in [
-            "nine-image-single-round", "reviewed_at", "wave_0", "wave_1", "wave_2",
+            "single-round", "reviewed_at", "wave_0", "wave_1", "wave_2",
             "total", "PNG/JPEG/WebP/GIF", "success 或合法 rejected",
         ]:
             self.assertIn(phrase, joined, phrase)
         self.assertNotIn("详见 SKILL §5 步骤 5", self.gate)
+        self.assertIn("N/N", joined)
+        self.assertIn("set-short-delivery-approval", joined)
+        self.assertNotIn("short_delivery_override", joined)
 
     def test_delivery_modes_and_docx_batch_rule_are_consistent(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
@@ -106,12 +119,18 @@ class SkillContractTest(unittest.TestCase):
             if hashes == "###":
                 self.assertIn(number.split(".")[0], level_two)
 
-    def test_readme_marks_v25_as_superseded_history(self):
-        section = self.readme.split("## v2.5", 1)[1].split("## v2.6", 1)[0]
-        self.assertIn("历史说明", section)
-        self.assertIn("已被 v2.6+", section)
-        self.assertIn("不再声称“所有产出统一 Docx”", section)
-        self.assertIn("不要求固定 11 章", section)
+    def test_history_is_kept_in_changelog_not_operational_docs(self):
+        self.assertNotRegex(self.skill, r"(?m)^## .*v2\.[0-9]")
+        self.assertIn("v2.8.0", self.changelog)
+
+    def test_bilingual_docx_and_prompt_text_separation_are_explicit(self):
+        joined = "\n".join([self.skill, self.gate, self.template])
+        for phrase in ["source_text", "zh_reference", "render_text", "逐项紧邻中文对照", "中文对照不得传入生图 prompt", "显式要求单语"]:
+            self.assertIn(phrase, joined, phrase)
+
+    def test_auxiliary_files_are_loaded_conditionally(self):
+        self.assertIn("按任务条件读取", self.skill)
+        self.assertNotIn("强制扩展规则", self.skill)
 
     def test_known_template_typos_are_absent(self):
         self.assertNotIn("㮐输出", self.template)
