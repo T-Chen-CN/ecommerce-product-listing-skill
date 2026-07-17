@@ -14,8 +14,10 @@ MUTATIONS = {"set-facts", "set-image-plan", "put-module", "update-slot", "set-to
 class FinalReviewSecurityTest(unittest.TestCase):
     def cli(self, *args, check=True):
         args = list(map(str, args))
-        if args and args[0] == "init" and "--delivery-mode" not in args:
-            args += ["--delivery-mode", "card"]
+        if args and args[0] == "init" and "--delivery-config" not in args:
+            manifest = Path(args[1]); route = manifest.parent / (manifest.name + ".route.json")
+            route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"interactive_card","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+            args += ["--delivery-config", str(route)]
         if args and args[0] in MUTATIONS and len(args) > 1 and Path(args[1]).exists() and not any(x in args for x in ("--revision", "--from-current")):
             d = json.loads(Path(args[1]).read_text())
             args += ["--manifest-id", d["manifest_id"], "--generation", str(d["generation"]), "--revision", str(d["revision"])]
@@ -150,7 +152,7 @@ class FinalReviewSecurityTest(unittest.TestCase):
             p.write_text(json.dumps({"schema_version": 4, "generation": 7, "revision": 12, "legacy": "anything"}))
             self.cli("init", p, "--force")
             data = json.loads(p.read_text())
-            self.assertEqual((data["schema_version"], data["generation"], data["revision"]), (7, 8, 13))
+            self.assertEqual((data["schema_version"], data["generation"], data["revision"]), (8, 8, 13))
             for field, value in (("generation", True), ("revision", "12"), ("generation", 0), ("revision", -1)):
                 p.write_text(json.dumps({"schema_version": 4, "generation": 7, "revision": 12, field: value}))
                 self.assertNotEqual(self.cli("init", p, "--force", check=False).returncode, 0)

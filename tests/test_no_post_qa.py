@@ -31,7 +31,9 @@ class NoPostQaContractTest(unittest.TestCase):
     def test_manifest_has_no_qa_contract_or_qa_slot_fields(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "run.json"
-            self.run_cli("init", path, "--delivery-mode", "card")
+            route = Path(td) / "route.json"
+            route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"interactive_card","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+            self.run_cli("init", path, "--delivery-config", route)
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("qa", data)
             for slot in data["images"]:
@@ -42,7 +44,9 @@ class NoPostQaContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             directory = Path(td)
             path = directory / "run.json"
-            self.run_cli("init", path, "--delivery-mode", "card")
+            route = Path(td) / "route.json"
+            route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"interactive_card","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+            self.run_cli("init", path, "--delivery-config", route)
             data = json.loads(path.read_text(encoding="utf-8"))
             deliverable = []
             for slot in data["images"]:

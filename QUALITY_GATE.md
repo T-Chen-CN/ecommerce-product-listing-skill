@@ -76,7 +76,7 @@
 
 ## 12. Manifest
 
-- 目录证据使用 schema v7，包含 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`，图片槽位包含 `images[].asset_filename`、`images[].image_batch`。每条 `delivery.directory_chain[]` 每层需携带解析证据：`resolution=reused|created`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`（带时区）。
+- 目录证据使用 schema v8，包含 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`，图片槽位包含 `images[].asset_filename`、`images[].image_batch`。每条 `delivery.directory_chain[]` 每层需携带解析证据：`resolution=reused|created`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`（带时区）。
 - `agent_name` 必须来自当前工作区 `IDENTITY.md` 的“名字”字段；缺失即 hard fail，不得用 `open_id` 或 `agent id` 兜底。
 - 每层 token 必须非空且非占位；拒绝空 token、占位 token、root fallback、名称/type/父子关系不一致、文件名不匹配、非正批次；`reused` 时首次匹配不为 1 或 `created=true`/`created_token` 非空；`created` 时三阶段计数不满足 0/0/1，或 `created_token` 与最终 token 不一致；任一阶段精确匹配大于 1；执行阶段 `pages_scanned_*` 非正整数。
 - JSON 捕获须隔离 stderr，stdout 必须是可解析的单一 JSON；空输出、混入日志或非零退出均拒绝。
@@ -101,17 +101,18 @@
 
 ## 14. 卡片
 
-- card 模式不伪造目录证据；未实际创建目录或 Docx 时，相应 token/permalink/文件名必须为空。
+- interactive_card 模式不伪造目录证据；未实际创建目录或 Docx 时，相应 token/permalink/文件名必须为空。
 
-- card 模式成功槽位要求 `image_key` 和发送证据。
+- interactive_card 模式成功槽位要求 `image_key` 和发送证据。
 - 失败槽位不得有 token，并按原序号写“生成失败”。
 - 不得残留 `file_token`、Docx token/permalink 或目录 permalink。
 
-## 15. 飞书 Preflight
+## 15. 飞书持久化路由
 
-- 写入前读取与已安装版本对齐的 lark-doc 指引，再做 capability preflight。
-- `media-insert --help` 支持 `--selection-with-ellipsis` 时使用它。
-- 未认证且用户拒绝授权时，明确退回图文卡片，不静默中断。
+- `run_manifest.py init --delivery-config` 直接严格读取持久配置；不接受 route result/bootstrap result。来源只允许 `skill_config` 或具备用户确认文本的 `explicit_user_override`。
+- 仅配置缺失、配置损坏、版本不兼容、失效或实际调用失败时进入 bootstrap/诊断；正常运行不得重复全量 preflight。
+- `docx` 降级为 `interactive_card` 必须有用户明确确认并记录 `delivery_override`；禁止静默降级。`preview_images` 与正式 `interactive_card` 严格隔离，不得满足或冒充正式交付。
+- 实际写入前读取版本对齐的 lark-doc 指引；`media-insert --help` 支持 `--selection-with-ellipsis` 时使用它。
 
 ## 16. 最终结论
 
