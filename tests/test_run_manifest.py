@@ -24,7 +24,10 @@ class ManifestCliTest(unittest.TestCase):
 
     def init(self, directory, mode="card", count=2):
         path = Path(directory) / "run.json"
-        self.cli("init", path, "--plan-mode", "custom", "--expected-count", count, "--confirmed-by-user", "--delivery-mode", mode)
+        route = self.route_file(directory, "interactive_card" if mode in {"card", "interactive_card"} else "docx")
+        args = ["init", path, "--plan-mode", "custom", "--expected-count", count, "--confirmed-by-user", "--delivery-route-file", route]
+        if mode == "docx": args += ["--agent-name", "Agent", "--product-name", "Product", "--country-code", "US"]
+        self.cli(*args)
         return path
 
     def ready(self, path, failed=(), mode="card"):
@@ -54,11 +57,45 @@ class ManifestCliTest(unittest.TestCase):
         path.write_text(json.dumps(data))
         return data
 
-    def test_init_uses_schema_v7_without_post_qa_fields(self):
+    def route_file(self, directory, route="interactive_card", source="skill_config", override=None):
+        path = Path(directory) / f"route-{route}.json"
+        path.write_text(json.dumps({"delivery_route": route, "delivery_route_source": source, "delivery_config_schema_version": 1, "delivery_override": override}))
+        return path
+
+    def test_schema_v8_requires_controlled_route_file_and_rejects_old_mode(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "run.json"
+            missing = self.cli("init", path, check=False)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("delivery-route-file", missing.stderr)
+            old = self.cli("init", path, "--delivery-mode", "docx", check=False)
+            self.assertNotEqual(old.returncode, 0)
+            self.assertTrue("unrecognized arguments" in old.stderr or "delivery-route-file" in old.stderr)
+
+    def test_route_sources_and_explicit_override_evidence_are_enforced(self):
+        with tempfile.TemporaryDirectory() as td:
+            for source in ("model_choice", "preview_images"):
+                route = self.route_file(td, source=source)
+                result = self.cli("init", Path(td) / f"{source}.json", "--delivery-route-file", route, check=False)
+                self.assertNotEqual(result.returncode, 0)
+            route = self.route_file(td, source="explicit_user_override")
+            result = self.cli("init", Path(td) / "override.json", "--delivery-route-file", route, check=False)
+            self.assertIn("delivery_override", result.stderr)
+
+    def test_preview_images_cannot_be_a_formal_route(self):
+        with tempfile.TemporaryDirectory() as td:
+            route = self.route_file(td, route="preview_images")
+            result = self.cli("init", Path(td) / "run.json", "--delivery-route-file", route, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("delivery_route", result.stderr)
+
+    def test_init_uses_schema_v8_without_post_qa_fields(self):
         with tempfile.TemporaryDirectory() as td:
             path = self.init(td)
             data = json.loads(path.read_text())
-            self.assertEqual(data["schema_version"], 7)
+            self.assertEqual(data["schema_version"], 8)
+            self.assertEqual(data["delivery_route"], "interactive_card")
+            self.assertEqual(data["delivery_route_source"], "skill_config")
             self.assertNotIn("qa", data)
             self.assertEqual(set(data["delivery"]) & {"deliverable_slots", "failed_slots"}, {"deliverable_slots", "failed_slots"})
             self.assertNotIn("rejected_slots", data["delivery"])
@@ -143,7 +180,7 @@ class ManifestCliTest(unittest.TestCase):
             data = self.ready(path)
             data["tokens"]["1"]["file_token"] = "file_stale"
             path.write_text(json.dumps(data))
-            self.assertIn("card delivery must not retain", self.cli("validate", path, "--delivery", check=False).stderr)
+            self.assertIn("interactive_card delivery must not retain", self.cli("validate", path, "--delivery", check=False).stderr)
 
     def test_timing_and_retry_code_validation_remain(self):
         with tempfile.TemporaryDirectory() as td:

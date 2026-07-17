@@ -31,7 +31,9 @@ class NoPostQaContractTest(unittest.TestCase):
     def test_manifest_has_no_qa_contract_or_qa_slot_fields(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "run.json"
-            self.run_cli("init", path, "--delivery-mode", "card")
+            route = Path(td) / "route.json"
+            route.write_text(json.dumps({"delivery_route":"interactive_card","delivery_route_source":"skill_config","delivery_config_schema_version":1,"delivery_override":None}))
+            self.run_cli("init", path, "--delivery-route-file", route)
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("qa", data)
             for slot in data["images"]:
@@ -42,7 +44,9 @@ class NoPostQaContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             directory = Path(td)
             path = directory / "run.json"
-            self.run_cli("init", path, "--delivery-mode", "card")
+            route = Path(td) / "route.json"
+            route.write_text(json.dumps({"delivery_route":"interactive_card","delivery_route_source":"skill_config","delivery_config_schema_version":1,"delivery_override":None}))
+            self.run_cli("init", path, "--delivery-route-file", route)
             data = json.loads(path.read_text(encoding="utf-8"))
             deliverable = []
             for slot in data["images"]:

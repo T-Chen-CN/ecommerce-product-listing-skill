@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 PLAN_MODES = ("default_full", "custom", "revision")
 TASK_SCOPES = ("content", "image", "full")
 LANGUAGE_MODES = ("bilingual", "target_only", "chinese")
@@ -20,13 +20,13 @@ SLOT_UPDATE_FIELDS = {"purpose", "prompt", "source_text", "zh_reference", "rende
 FACT_FIELDS = {"market", "platform", "category", "brand", "model", "language", "product", "copy", "references", "notes"}
 DELIVERY_FIELDS = {"deliverable_slots", "failed_slots", "docx", "folder", "card", "directory_chain", "product_folder_token"}
 TOKEN_FIELDS = {"image_key", "file_token", "block_id"}
-ROOT_FIELDS = {"schema_version","manifest_id","generation","revision","created_at","updated_at","run_root","task_scope","plan_mode","expected_count","confirmed_by_user","target_language","docx_language_mode","localization_policy","target_only_approval","module_contracts","requested_docx_modules","delivery_mode","agent_name","product_slug","market_country_code","drive_path_segments","facts","modules","images","tokens","delivery","timings","status"}
+ROOT_FIELDS = {"schema_version","manifest_id","generation","revision","created_at","updated_at","run_root","task_scope","plan_mode","expected_count","confirmed_by_user","target_language","docx_language_mode","localization_policy","target_only_approval","module_contracts","requested_docx_modules","delivery_route","delivery_route_source","delivery_config_schema_version","delivery_override","agent_name","product_slug","market_country_code","drive_path_segments","facts","modules","images","tokens","delivery","timings","status"}
 IMAGE_FIELDS = {"slot","purpose","prompt","source_text","zh_reference","render_text","status","file","provider_error","asset_filename","image_batch"}
 PROVIDER_ERROR_FIELDS = {"code","message","retryable","provider","request_id","status"}
 DOCX_FIELDS = {"token","permalink","docx_filename","docx_batch"}; FOLDER_FIELDS={"token","permalink"}; CARD_FIELDS={"message_id","send_success"}
 DIRECTORY_ENTRY_FIELDS = {"name", "token", "type", "parent_token", "resolution", "exact_match_count_first", "exact_match_count_second", "exact_match_count_after", "created", "created_token", "pages_scanned_first", "pages_scanned_second", "pages_scanned_after", "resolved_at"}
 TIMING_FIELDS={"seconds","recorded_at"}; MODULE_CONTRACT_FIELDS={"kind"}
-POLICY_FIELDS={"docx_language_mode","basis","override"}; OVERRIDE_FIELDS={"approved_by","confirmation_text","recorded_at"}
+POLICY_FIELDS={"docx_language_mode","basis","override"}; OVERRIDE_FIELDS={"approved_by","confirmation_text","recorded_at"}; DELIVERY_OVERRIDE_FIELDS={"delivery_route","confirmation_text","recorded_at"}
 ISO_ALPHA2 = set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split())
 
 
@@ -290,9 +290,21 @@ def structural_errors(data):
     if data.get("plan_mode") not in PLAN_MODES: errors.append("plan_mode must be default_full, custom, or revision")
     if data.get("docx_language_mode") not in LANGUAGE_MODES: errors.append("docx_language_mode must be bilingual, target_only, or chinese")
     if not isinstance(data.get("target_language"), str) or not data.get("target_language", "").strip(): errors.append("target_language must be non-empty")
-    delivery_mode=data.get("delivery_mode")
-    if delivery_mode not in {"docx", "card"}:errors.append("delivery_mode must be docx or card")
-    if delivery_mode == "docx":
+    delivery_route=data.get("delivery_route")
+    if delivery_route not in {"docx", "interactive_card"}:errors.append("delivery_route must be docx or interactive_card")
+    source=data.get("delivery_route_source")
+    if source not in {"skill_config", "bootstrap_result", "explicit_user_override"}:errors.append("delivery_route_source must be skill_config, bootstrap_result, or explicit_user_override")
+    if data.get("delivery_config_schema_version") != 1:errors.append("delivery_config_schema_version must equal 1")
+    override=data.get("delivery_override")
+    if source == "explicit_user_override":
+        if not isinstance(override,dict):errors.append("explicit_user_override requires delivery_override user evidence")
+        else:
+            errors.extend(unknown_errors(override,DELIVERY_OVERRIDE_FIELDS,"delivery_override"))
+            if override.get("delivery_route") != delivery_route:errors.append("delivery_override.delivery_route must equal delivery_route")
+            if not isinstance(override.get("confirmation_text"),str) or not override.get("confirmation_text","").strip():errors.append("delivery_override.confirmation_text must be non-empty")
+            if not is_timezone_datetime(override.get("recorded_at")):errors.append("delivery_override.recorded_at must be datetime with timezone")
+    elif override is not None:errors.append("delivery_override must be null unless source is explicit_user_override")
+    if delivery_route == "docx":
         if not isinstance(data.get("agent_name"),str) or not data.get("agent_name","").strip():errors.append("agent_name must be non-empty for docx delivery")
         if not isinstance(data.get("product_slug"),str) or not data.get("product_slug","").strip():errors.append("product_slug must be non-empty for docx delivery")
         if data.get("market_country_code") not in ISO_ALPHA2:errors.append("market_country_code must be a valid ISO 3166-1 alpha-2 uppercase code")
@@ -300,7 +312,7 @@ def structural_errors(data):
         if data.get("drive_path_segments") != expected_path:errors.append(f"drive_path_segments must equal {expected_path!r}")
     else:
         for field in ("agent_name","product_slug","market_country_code","drive_path_segments"):
-            if field in data:errors.append(f"card delivery must not contain {field}")
+            if field in data:errors.append(f"interactive_card delivery must not contain {field}")
     policy=data.get("localization_policy")
     if not isinstance(policy,dict) or policy.get("docx_language_mode")!=data.get("docx_language_mode") or not isinstance(policy.get("basis"),str): errors.append("localization_policy must record mode and basis")
     else:
@@ -344,7 +356,7 @@ def structural_errors(data):
         if isinstance(delivery.get("docx"),dict):errors.extend(unknown_errors(delivery["docx"],DOCX_FIELDS,"delivery.docx"))
         if isinstance(delivery.get("folder"),dict):errors.extend(unknown_errors(delivery["folder"],FOLDER_FIELDS,"delivery.folder"))
         if isinstance(delivery.get("card"),dict):errors.extend(unknown_errors(delivery["card"],CARD_FIELDS,"delivery.card"))
-        if delivery_mode == "docx":
+        if delivery_route == "docx":
             chain=delivery.get("directory_chain")
             if not isinstance(chain,list):errors.append("delivery.directory_chain must be an array")
             else:
@@ -358,10 +370,10 @@ def structural_errors(data):
             if token is not None and not isinstance(token,str):errors.append("delivery.product_folder_token must be string or null")
         else:
             for field in ("directory_chain","product_folder_token"):
-                if field in delivery:errors.append(f"card delivery must not contain delivery.{field}")
+                if field in delivery:errors.append(f"interactive_card delivery must not contain delivery.{field}")
             if isinstance(delivery.get("docx"),dict):
                 for field in ("docx_filename","docx_batch"):
-                    if field in delivery["docx"]:errors.append(f"card delivery must not contain delivery.docx.{field}")
+                    if field in delivery["docx"]:errors.append(f"interactive_card delivery must not contain delivery.docx.{field}")
         for field in ("deliverable_slots", "failed_slots"):
             values = delivery.get(field)
             if not isinstance(values, list) or not all(is_int(v) and v >= 1 for v in values): errors.append(f"delivery.{field} must be positive integer array")
@@ -431,8 +443,18 @@ def cmd_init(args):
     if args.target_only_approved_by_user:
         args.monolingual=True; args.monolingual_confirmation=args.target_only_confirmation
     target, policy = infer_localization(args); mode=policy["docx_language_mode"]
+    try: route_evidence=load(args.delivery_route_file)
+    except (OSError,json.JSONDecodeError) as exc: raise ValueError(f"invalid --delivery-route-file: {exc}") from exc
+    reject_unknown(route_evidence,{"delivery_route","delivery_route_source","delivery_config_schema_version","delivery_override"},"delivery route")
+    route=route_evidence.get("delivery_route");source=route_evidence.get("delivery_route_source");override=route_evidence.get("delivery_override")
+    if route not in {"docx","interactive_card"}:raise ValueError("delivery_route must be docx or interactive_card; preview_images is not formal delivery")
+    if source not in {"skill_config","bootstrap_result","explicit_user_override"}:raise ValueError("delivery_route_source is not controlled")
+    if route_evidence.get("delivery_config_schema_version") != 1:raise ValueError("delivery_config_schema_version must equal 1")
+    if source == "explicit_user_override":
+        if not isinstance(override,dict) or override.get("delivery_route") != route or not str(override.get("confirmation_text","")).strip() or not is_timezone_datetime(override.get("recorded_at")):raise ValueError("explicit_user_override requires valid delivery_override user evidence")
+    elif override is not None:raise ValueError("delivery_override must be null unless source is explicit_user_override")
     slug=None
-    if args.delivery_mode == "docx":
+    if route == "docx":
         missing=[flag for flag,value in (("--agent-name",args.agent_name),("--product-name",args.product_name),("--country-code",args.country_code)) if not isinstance(value,str) or not value.strip()]
         if missing:raise ValueError("docx delivery requires "+", ".join(missing))
         slug=product_slug(args.product_name,args.country_code)
@@ -444,17 +466,17 @@ def cmd_init(args):
             old = load(path)
             if not isinstance(old,dict):raise ValueError("existing manifest must be an object")
             if old.get("schema_version") == SCHEMA_VERSION:check_schema(old)
-            elif old.get("schema_version") not in {3,4,5,6}:raise ValueError("--force can rebuild only schema v3/v4/v5/v6 or current v7 manifest")
+            elif old.get("schema_version") not in {3,4,5,6,7}:raise ValueError("--force can rebuild only schema v3-v7 or current v8 manifest")
             old_revision,generation=old.get("revision"),old.get("generation")
             if not is_int(old_revision) or old_revision<0:raise ValueError("existing revision must be a non-negative integer")
             if not is_int(generation) or generation<1:raise ValueError("existing generation must be a positive integer")
         data = {"schema_version":SCHEMA_VERSION,"manifest_id":str(uuid.uuid4()),"generation":generation+1,"revision":old_revision+1,"created_at":now(),"run_root":str(Path(args.manifest).resolve().parent),
                 "task_scope":scope,"plan_mode":args.plan_mode,"expected_count":expected,"confirmed_by_user":bool(scope=="content" or args.confirmed_by_user or args.plan_mode=="default_full"),
-                "target_language":target,"docx_language_mode":mode,"localization_policy":policy,"target_only_approval":evidence,"module_contracts":{name:"docx_text" for name in args.requested_module},"requested_docx_modules":list(dict.fromkeys(args.requested_module)),"delivery_mode":args.delivery_mode,
+                "target_language":target,"docx_language_mode":mode,"localization_policy":policy,"target_only_approval":evidence,"module_contracts":{name:"docx_text" for name in args.requested_module},"requested_docx_modules":list(dict.fromkeys(args.requested_module)),"delivery_route":route,"delivery_route_source":source,"delivery_config_schema_version":1,"delivery_override":override,
                 "facts":{"market":args.market,"platform":args.platform,"category":args.category},"modules":{},"images":[slot_shape(n) for n in range(1,expected+1)],
                 "tokens":{},
                 "delivery":{"deliverable_slots":[],"failed_slots":[],"docx":{"token":None,"permalink":None},"folder":{"permalink":None},"card":{"message_id":None,"send_success":False}},"timings":{},"status":"initialized"}
-        if args.delivery_mode == "docx":
+        if route == "docx":
             data.update(agent_name=args.agent_name.strip(),product_slug=slug,market_country_code=args.country_code.upper(),drive_path_segments=[args.agent_name.strip(),"电商需求","Listing",slug])
             data["delivery"].update(directory_chain=[],product_folder_token=None)
             data["delivery"]["docx"].update(docx_filename=None,docx_batch=None)
@@ -613,7 +635,7 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
             if escapes_run_root(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must be contained in run_root (no external absolute, .., or symlink escape)")
             elif not is_readable_regular_file(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must exist and be a readable regular file")
             elif not has_supported_image_magic(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must have PNG/JPEG/WebP/GIF magic bytes")
-            if data["delivery_mode"] == "docx":
+            if data["delivery_route"] == "docx":
                 asset=x.get("asset_filename");batch=x.get("image_batch")
                 match=re.fullmatch(r"(?:Main|SKU)(\d{3})-(\d{2})\.(png|jpg|jpeg|webp|gif)",asset or "",re.IGNORECASE)
                 if not match:errors.append(f"slot {n}: asset_filename must strictly match MainNNN-NN or SKUNNN-NN with a supported image extension")
@@ -662,7 +684,7 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
     tokens=data["tokens"]
     for key in tokens:
         if key not in {str(x) for x in ids}:errors.append(f"unknown token slot {key!r}")
-    mode=data["delivery_mode"]
+    mode=data["delivery_route"]
     for n in deliverable:
         token=tokens.get(str(n),{})
         if not isinstance(token,dict):errors.append(f"slot {n}: token evidence must be object");continue
@@ -718,8 +740,8 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
         if images or data["tokens"] or state["deliverable_slots"] or state["failed_slots"]:errors.append("content scope must not contain image contract or tokens")
         if state["card"].get("send_success") or state["card"].get("message_id"):errors.append("content scope must not require or retain card evidence")
         return errors
-    if mode=="card":
-        if any(isinstance(t,dict) and t.get("file_token") for t in tokens.values()) or state["docx"].get("token") or state["docx"].get("permalink") or state["folder"].get("permalink"):errors.append("card delivery must not retain docx or folder evidence")
+    if mode=="interactive_card":
+        if any(isinstance(t,dict) and t.get("file_token") for t in tokens.values()) or state["docx"].get("token") or state["docx"].get("permalink") or state["folder"].get("permalink"):errors.append("interactive_card delivery must not retain docx or folder evidence")
     card=state["card"]
     if card.get("send_success") is not True or not is_identifier(card.get("message_id")):errors.append("image delivery requires card send_success true and message_id; message_id must be non-whitespace and at least 6 characters")
     return errors
@@ -752,7 +774,7 @@ def add_mutation_args(p,json_arg=True):
 
 def parser():
     root=argparse.ArgumentParser(description=__doc__);sub=root.add_subparsers(dest="command",required=True)
-    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-mode",choices=("docx","card"),default="docx");p.add_argument("--agent-name");p.add_argument("--product-name");p.add_argument("--country-code");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
+    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-route-file",required=True);p.add_argument("--agent-name");p.add_argument("--product-name");p.add_argument("--country-code");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
     p=sub.add_parser("slug");p.add_argument("--product-name",required=True);p.add_argument("--country-code",required=True);p.set_defaults(func=cmd_slug)
     for name,func in (("set-facts",cmd_set_facts),("set-image-plan",cmd_set_image_plan),("set-delivery",cmd_set_delivery)):
         p=sub.add_parser(name);add_mutation_args(p);p.set_defaults(func=func)
