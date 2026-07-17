@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 PLAN_MODES = ("default_full", "custom", "revision")
 TASK_SCOPES = ("content", "image", "full")
 LANGUAGE_MODES = ("bilingual", "target_only", "chinese")
@@ -16,16 +16,18 @@ MARKET_LANGUAGES = {"JP":"ja"}
 RETRYABLE_CODES = {"rate_limit", "server_error", "timeout", "network_error", "provider_json_error"}
 TIMING_STAGES = ("wave_0", "wave_1", "wave_2", "total")
 SLOT_PLAN_FIELDS = {"slot", "purpose", "prompt", "source_text", "zh_reference", "render_text"}
-SLOT_UPDATE_FIELDS = {"purpose", "prompt", "source_text", "zh_reference", "render_text", "status", "file", "provider_error"}
+SLOT_UPDATE_FIELDS = {"purpose", "prompt", "source_text", "zh_reference", "render_text", "status", "file", "provider_error", "asset_filename", "image_batch"}
 FACT_FIELDS = {"market", "platform", "category", "brand", "model", "language", "product", "copy", "references", "notes"}
-DELIVERY_FIELDS = {"deliverable_slots", "failed_slots", "docx", "folder", "card"}
+DELIVERY_FIELDS = {"deliverable_slots", "failed_slots", "docx", "folder", "card", "directory_chain", "product_folder_token"}
 TOKEN_FIELDS = {"image_key", "file_token", "block_id"}
-ROOT_FIELDS = {"schema_version","manifest_id","generation","revision","created_at","updated_at","run_root","task_scope","plan_mode","expected_count","confirmed_by_user","target_language","docx_language_mode","localization_policy","target_only_approval","module_contracts","requested_docx_modules","delivery_mode","facts","modules","images","tokens","delivery","timings","status"}
-IMAGE_FIELDS = {"slot","purpose","prompt","source_text","zh_reference","render_text","status","file","provider_error"}
+ROOT_FIELDS = {"schema_version","manifest_id","generation","revision","created_at","updated_at","run_root","task_scope","plan_mode","expected_count","confirmed_by_user","target_language","docx_language_mode","localization_policy","target_only_approval","module_contracts","requested_docx_modules","delivery_mode","agent_name","product_slug","market_country_code","drive_path_segments","facts","modules","images","tokens","delivery","timings","status"}
+IMAGE_FIELDS = {"slot","purpose","prompt","source_text","zh_reference","render_text","status","file","provider_error","asset_filename","image_batch"}
 PROVIDER_ERROR_FIELDS = {"code","message","retryable","provider","request_id","status"}
-DOCX_FIELDS = {"token","permalink"}; FOLDER_FIELDS={"permalink"}; CARD_FIELDS={"message_id","send_success"}
+DOCX_FIELDS = {"token","permalink","docx_filename","docx_batch"}; FOLDER_FIELDS={"token","permalink"}; CARD_FIELDS={"message_id","send_success"}
+DIRECTORY_ENTRY_FIELDS = {"name", "token", "type", "parent_token"}
 TIMING_FIELDS={"seconds","recorded_at"}; MODULE_CONTRACT_FIELDS={"kind"}
 POLICY_FIELDS={"docx_language_mode","basis","override"}; OVERRIDE_FIELDS={"approved_by","confirmation_text","recorded_at"}
+ISO_ALPHA2 = set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split())
 
 
 def now(): return datetime.now(timezone.utc).isoformat()
@@ -35,6 +37,22 @@ def unknown_errors(value,allowed,path):
     if not isinstance(value,dict): return []
     extra=set(value)-allowed
     return [f"{path}: unknown fields: {sorted(extra)}"] if extra else []
+
+
+def product_slug(product_name, country_code):
+    """Create the literal product-name slug used by the delivery directory contract."""
+    if not isinstance(product_name, str):
+        raise ValueError("product-name must be a string")
+    if not isinstance(country_code, str) or country_code.upper() not in ISO_ALPHA2:
+        raise ValueError("country-code must be an ISO 2-letter country code")
+    if any(ord(char) < 32 or ord(char) == 127 for char in product_name):
+        raise ValueError("product-name must not contain control characters")
+    body = re.sub(r"\s+", "-", product_name)
+    body = re.sub(r'[/\\:*?"<>|]', "", body)
+    body = re.sub(r"-+", "-", body).strip("-")
+    if not body or body in {".", ".."}:
+        raise ValueError("product-name must have a non-empty slug body after sanitization")
+    return f"{body}-{country_code.upper()}"
 
 
 def atomic_save(path, data):
@@ -184,7 +202,7 @@ def approval_override_errors(value,path):
 
 
 def slot_shape(n):
-    return {"slot": n, "purpose": None, "prompt": None, "status": "pending", "file": None, "provider_error": None}
+    return {"slot": n, "purpose": None, "prompt": None, "status": "pending", "file": None, "provider_error": None, "asset_filename": None, "image_batch": None}
 
 
 def provider_error_shape_errors(value, path, require_core=False):
@@ -220,6 +238,17 @@ def structural_errors(data):
     if data.get("plan_mode") not in PLAN_MODES: errors.append("plan_mode must be default_full, custom, or revision")
     if data.get("docx_language_mode") not in LANGUAGE_MODES: errors.append("docx_language_mode must be bilingual, target_only, or chinese")
     if not isinstance(data.get("target_language"), str) or not data.get("target_language", "").strip(): errors.append("target_language must be non-empty")
+    delivery_mode=data.get("delivery_mode")
+    if delivery_mode not in {"docx", "card"}:errors.append("delivery_mode must be docx or card")
+    if delivery_mode == "docx":
+        if not isinstance(data.get("agent_name"),str) or not data.get("agent_name","").strip():errors.append("agent_name must be non-empty for docx delivery")
+        if not isinstance(data.get("product_slug"),str) or not data.get("product_slug","").strip():errors.append("product_slug must be non-empty for docx delivery")
+        if data.get("market_country_code") not in ISO_ALPHA2:errors.append("market_country_code must be a valid ISO 3166-1 alpha-2 uppercase code")
+        expected_path=[data.get("agent_name"),"电商需求","Listing",data.get("product_slug")]
+        if data.get("drive_path_segments") != expected_path:errors.append(f"drive_path_segments must equal {expected_path!r}")
+    else:
+        for field in ("agent_name","product_slug","market_country_code","drive_path_segments"):
+            if field in data:errors.append(f"card delivery must not contain {field}")
     policy=data.get("localization_policy")
     if not isinstance(policy,dict) or policy.get("docx_language_mode")!=data.get("docx_language_mode") or not isinstance(policy.get("basis"),str): errors.append("localization_policy must record mode and basis")
     else:
@@ -263,6 +292,21 @@ def structural_errors(data):
         if isinstance(delivery.get("docx"),dict):errors.extend(unknown_errors(delivery["docx"],DOCX_FIELDS,"delivery.docx"))
         if isinstance(delivery.get("folder"),dict):errors.extend(unknown_errors(delivery["folder"],FOLDER_FIELDS,"delivery.folder"))
         if isinstance(delivery.get("card"),dict):errors.extend(unknown_errors(delivery["card"],CARD_FIELDS,"delivery.card"))
+        if delivery_mode == "docx":
+            chain=delivery.get("directory_chain")
+            if not isinstance(chain,list):errors.append("delivery.directory_chain must be an array")
+            else:
+                for i,entry in enumerate(chain):
+                    if not isinstance(entry,dict):errors.append(f"delivery.directory_chain[{i}] must be object")
+                    else:errors.extend(unknown_errors(entry,DIRECTORY_ENTRY_FIELDS,f"delivery.directory_chain[{i}]"))
+            token=delivery.get("product_folder_token")
+            if token is not None and not isinstance(token,str):errors.append("delivery.product_folder_token must be string or null")
+        else:
+            for field in ("directory_chain","product_folder_token"):
+                if field in delivery:errors.append(f"card delivery must not contain delivery.{field}")
+            if isinstance(delivery.get("docx"),dict):
+                for field in ("docx_filename","docx_batch"):
+                    if field in delivery["docx"]:errors.append(f"card delivery must not contain delivery.docx.{field}")
         for field in ("deliverable_slots", "failed_slots"):
             values = delivery.get(field)
             if not isinstance(values, list) or not all(is_int(v) and v >= 1 for v in values): errors.append(f"delivery.{field} must be positive integer array")
@@ -332,6 +376,11 @@ def cmd_init(args):
     if args.target_only_approved_by_user:
         args.monolingual=True; args.monolingual_confirmation=args.target_only_confirmation
     target, policy = infer_localization(args); mode=policy["docx_language_mode"]
+    slug=None
+    if args.delivery_mode == "docx":
+        missing=[flag for flag,value in (("--agent-name",args.agent_name),("--product-name",args.product_name),("--country-code",args.country_code)) if not isinstance(value,str) or not value.strip()]
+        if missing:raise ValueError("docx delivery requires "+", ".join(missing))
+        slug=product_slug(args.product_name,args.country_code)
     evidence = policy["override"]
     with manifest_lock(args.manifest):
         path = Path(args.manifest); old_revision, generation = -1, 0
@@ -340,7 +389,7 @@ def cmd_init(args):
             old = load(path)
             if not isinstance(old,dict):raise ValueError("existing manifest must be an object")
             if old.get("schema_version") == SCHEMA_VERSION:check_schema(old)
-            elif old.get("schema_version") not in {3,4}:raise ValueError("--force can rebuild only schema v3/v4 or current v5 manifest")
+            elif old.get("schema_version") not in {3,4,5}:raise ValueError("--force can rebuild only schema v3/v4/v5 or current v6 manifest")
             old_revision,generation=old.get("revision"),old.get("generation")
             if not is_int(old_revision) or old_revision<0:raise ValueError("existing revision must be a non-negative integer")
             if not is_int(generation) or generation<1:raise ValueError("existing generation must be a positive integer")
@@ -350,7 +399,15 @@ def cmd_init(args):
                 "facts":{"market":args.market,"platform":args.platform,"category":args.category},"modules":{},"images":[slot_shape(n) for n in range(1,expected+1)],
                 "tokens":{},
                 "delivery":{"deliverable_slots":[],"failed_slots":[],"docx":{"token":None,"permalink":None},"folder":{"permalink":None},"card":{"message_id":None,"send_success":False}},"timings":{},"status":"initialized"}
+        if args.delivery_mode == "docx":
+            data.update(agent_name=args.agent_name.strip(),product_slug=slug,market_country_code=args.country_code.upper(),drive_path_segments=[args.agent_name.strip(),"电商需求","Listing",slug])
+            data["delivery"].update(directory_chain=[],product_folder_token=None)
+            data["delivery"]["docx"].update(docx_filename=None,docx_batch=None)
         check_schema(data); atomic_save(path,data)
+
+
+def cmd_slug(args):
+    print(product_slug(args.product_name,args.country_code))
 
 
 def cmd_set_facts(args):
@@ -473,6 +530,10 @@ def is_feishu_url(v):
     except ValueError:return False
     return p.scheme=="https" and any(host==d or host.endswith("."+d) for d in ("feishu.cn","larksuite.com"))
 
+def permalink_token(value):
+    try:return urlparse(value).path.rstrip("/").split("/")[-1]
+    except (TypeError,ValueError):return ""
+
 
 def slot_classification(data):
     contracted = {x["slot"]: x for x in data["images"] if x["slot"] <= data["expected_count"]}
@@ -488,6 +549,7 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
     errors=structural_errors(data)
     if errors:return errors
     scope,expected=data["task_scope"],data["expected_count"]
+    if not is_timezone_datetime(data.get("created_at")):errors.append("created_at must be datetime with timezone")
     images=data["images"]; ids={x["slot"] for x in images}
     for x in images:
         n,status=x["slot"],x.get("status")
@@ -496,6 +558,15 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
             if escapes_run_root(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must be contained in run_root (no external absolute, .., or symlink escape)")
             elif not is_readable_regular_file(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must exist and be a readable regular file")
             elif not has_supported_image_magic(x.get("file"),data["run_root"]):errors.append(f"slot {n}: delivery file must have PNG/JPEG/WebP/GIF magic bytes")
+            if data["delivery_mode"] == "docx":
+                asset=x.get("asset_filename");batch=x.get("image_batch")
+                match=re.fullmatch(r"(?:Main|SKU)(\d{3})-(\d{2})\.(png|jpg|jpeg|webp|gif)",asset or "",re.IGNORECASE)
+                if not match:errors.append(f"slot {n}: asset_filename must strictly match MainNNN-NN or SKUNNN-NN with a supported image extension")
+                elif int(match.group(1))!=n:errors.append(f"slot {n}: asset_filename slot must match current contract slot")
+                if not is_int(batch) or batch<1:errors.append(f"slot {n}: image_batch must be a positive integer")
+                elif match and int(match.group(2))!=batch:errors.append(f"slot {n}: asset_filename batch must match image_batch")
+                actual=resolve_file(x.get("file"),data["run_root"])
+                if actual is not None and asset != actual.name:errors.append(f"slot {n}: asset_filename must equal Path(file).name")
         elif status=="failed":
             if x.get("file") is not None:errors.append(f"slot {n}: status failed requires file null")
             if not isinstance(x.get("provider_error"),dict):errors.append(f"slot {n}: status failed requires provider_error")
@@ -519,22 +590,20 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
         docx,folder=state["docx"],state["folder"]
         if not is_identifier(docx.get("token")) or not is_feishu_url(docx.get("permalink")):errors.append("delivery docx token and Feishu permalink required")
         if not is_feishu_url(folder.get("permalink")):errors.append("delivery folder permalink required")
-    if scope=="content":
-        if images or data["tokens"] or state["deliverable_slots"] or state["failed_slots"]:errors.append("content scope must not contain image contract or tokens")
-        if state["card"].get("send_success") or state["card"].get("message_id"):errors.append("content scope must not require or retain card evidence")
-        return errors
-    deliverable,failed=slot_classification(data)
+    content_only=scope=="content"
+    deliverable,failed=([],[]) if content_only else slot_classification(data)
     if len(deliverable)+len(failed)!=expected:errors.append(f"expected_count={expected} requires every contracted slot to be success or failed")
     extra=[x["slot"] for x in images if x["slot"]>expected]
     if extra:errors.append(f"replacement/extra slots are not part of final delivery: {extra}")
     if state["deliverable_slots"]!=deliverable:errors.append("delivery.deliverable_slots must match successful contracted slots")
     if state["failed_slots"]!=failed:errors.append("delivery.failed_slots must match failed contracted slots")
     timings=data["timings"]; seconds={}
-    for stage in TIMING_STAGES:
-        value=(timings.get(stage) or {}).get("seconds")
-        if not isinstance(value,(int,float)) or isinstance(value,bool) or not math.isfinite(value) or value<0:errors.append(f"timings.{stage}.seconds must be finite and >= 0")
-        else:seconds[stage]=value
-    if len(seconds)==4 and any(seconds["total"]<seconds[x] for x in TIMING_STAGES[:-1]):errors.append("timings.total.seconds must be at least each wave")
+    if not content_only:
+        for stage in TIMING_STAGES:
+            value=(timings.get(stage) or {}).get("seconds")
+            if not isinstance(value,(int,float)) or isinstance(value,bool) or not math.isfinite(value) or value<0:errors.append(f"timings.{stage}.seconds must be finite and >= 0")
+            else:seconds[stage]=value
+        if len(seconds)==4 and any(seconds["total"]<seconds[x] for x in TIMING_STAGES[:-1]):errors.append("timings.total.seconds must be at least each wave")
     tokens=data["tokens"]
     for key in tokens:
         if key not in {str(x) for x in ids}:errors.append(f"unknown token slot {key!r}")
@@ -553,6 +622,47 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
         elif not is_feishu_url(docx.get("permalink")):errors.append("delivery docx permalink must be HTTPS Feishu/Lark URL")
         if not folder.get("permalink"):errors.append("delivery folder permalink required")
         elif not is_feishu_url(folder.get("permalink")):errors.append("delivery folder permalink must be HTTPS Feishu/Lark URL")
+        expected_path=[data["agent_name"],"电商需求","Listing",data["product_slug"]]
+        if data.get("drive_path_segments") != expected_path:errors.append(f"drive_path_segments must exactly equal {expected_path!r}")
+        chain=state.get("directory_chain")
+        if not isinstance(chain,list) or len(chain)!=4:errors.append("delivery.directory_chain must contain exactly four folder entries")
+        else:
+            tokens=[]
+            for i,(entry,name) in enumerate(zip(chain,expected_path)):
+                path=f"delivery.directory_chain[{i}]"
+                if not isinstance(entry,dict):continue
+                if entry.get("name")!=name:errors.append(f"{path}.name must be {name!r}")
+                if entry.get("type")!="folder":errors.append(f"{path}.type must be folder")
+                token=entry.get("token")
+                if not isinstance(token,str) or not token.strip() or token.strip().lower() in {"todo","tbd","placeholder","null","none"}:errors.append(f"{path}.token must be non-empty, non-placeholder token")
+                else:tokens.append(token)
+                parent=entry.get("parent_token")
+                if i==0:
+                    if parent!="root":errors.append(f"{path}.parent_token must be the literal root sentinel 'root'")
+                elif parent!=chain[i-1].get("token"):errors.append(f"{path}.parent_token must equal previous layer token")
+                if token and parent==token:errors.append(f"{path} must not self-parent")
+            if len(tokens)!=len(set(tokens)):errors.append("delivery.directory_chain tokens must be unique")
+            if chain[-1].get("token")!=state.get("product_folder_token"):errors.append("delivery.product_folder_token must equal final directory_chain token")
+        folder_token=folder.get("token")
+        if folder_token != state.get("product_folder_token"):errors.append("delivery.folder.token must equal product_folder_token")
+        if permalink_token(folder.get("permalink")) != state.get("product_folder_token"):errors.append("delivery folder permalink final path segment must equal product_folder_token")
+        if permalink_token(docx.get("permalink")) != docx.get("token"):errors.append("delivery docx permalink final path segment must equal docx.token")
+        filename,batch=docx.get("docx_filename"),docx.get("docx_batch")
+        if not is_int(batch) or batch<1:errors.append("delivery.docx.docx_batch must be a positive integer")
+        match=re.fullmatch(r"(\d{8})-(.+)-(\d{3})\.docx",filename or "")
+        if not match:errors.append("delivery.docx.docx_filename must match YYYYMMDD-{slug}-{batch:03d}.docx")
+        else:
+            try:
+                filename_date=datetime.strptime(match.group(1),"%Y%m%d").date()
+                created=datetime.fromisoformat(data["created_at"].replace("Z","+00:00")).astimezone(timezone.utc).date()
+                if filename_date != created:errors.append("delivery.docx.docx_filename date must equal created_at UTC date")
+            except (ValueError,KeyError):errors.append("delivery.docx.docx_filename date and created_at must be valid")
+            if match.group(2)!=data["product_slug"]:errors.append("delivery.docx.docx_filename slug must match product_slug")
+            if is_int(batch) and int(match.group(3))!=batch:errors.append("delivery.docx.docx_filename batch must match docx_batch")
+    if content_only:
+        if images or data["tokens"] or state["deliverable_slots"] or state["failed_slots"]:errors.append("content scope must not contain image contract or tokens")
+        if state["card"].get("send_success") or state["card"].get("message_id"):errors.append("content scope must not require or retain card evidence")
+        return errors
     if mode=="card":
         if any(isinstance(t,dict) and t.get("file_token") for t in tokens.values()) or state["docx"].get("token") or state["docx"].get("permalink") or state["folder"].get("permalink"):errors.append("card delivery must not retain docx or folder evidence")
     card=state["card"]
@@ -587,7 +697,8 @@ def add_mutation_args(p,json_arg=True):
 
 def parser():
     root=argparse.ArgumentParser(description=__doc__);sub=root.add_subparsers(dest="command",required=True)
-    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-mode",choices=("docx","card"),default="docx");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
+    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-mode",choices=("docx","card"),default="docx");p.add_argument("--agent-name");p.add_argument("--product-name");p.add_argument("--country-code");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
+    p=sub.add_parser("slug");p.add_argument("--product-name",required=True);p.add_argument("--country-code",required=True);p.set_defaults(func=cmd_slug)
     for name,func in (("set-facts",cmd_set_facts),("set-image-plan",cmd_set_image_plan),("set-delivery",cmd_set_delivery)):
         p=sub.add_parser(name);add_mutation_args(p);p.set_defaults(func=func)
     p=sub.add_parser("put-module");add_mutation_args(p);p.add_argument("name");p.add_argument("--module-kind",choices=MODULE_KINDS,default="docx_text");p.set_defaults(func=cmd_put_module)

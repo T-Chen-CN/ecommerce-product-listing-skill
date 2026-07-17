@@ -120,7 +120,7 @@ python3 scripts/run_manifest.py validate run-manifest.json --delivery
 - 图片 03：生成失败
 ```
 
-成功图片按序号附图或插入文档；失败序号只写“生成失败”，不附原因分析、质量评级或修改建议。
+成功图片按序号附图或插入文档；失败序号只写“生成失败”，不附原因分析、质量分级或修改建议。
 
 ## 7. Docx / 图文卡片分流
 
@@ -133,3 +133,41 @@ python3 scripts/run_manifest.py validate run-manifest.json --delivery
 📁 产品文件夹：<folder-permalink>
 🖼 图文卡片：已发送
 ```
+
+## 8. Listing 目录与命名证据
+
+固定路径：`/{agent_name}/电商需求/Listing/{slug}/`。`agent_name` 从当前工作区 `IDENTITY.md` 的“名字”字段读取，缺失 hard fail；不得以 `open_id` / `agent id` 兜底。Skill 自动逐层查询、幂等创建，禁止要求用户人工预建。每层验证非空非占位 token、名称、`type=folder` 与 `parent`；禁止 root fallback。JSON 捕获隔离 stderr，stdout 只保留 JSON。
+
+slug 使用品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；whitespace 转横线，删除禁用字符，连续横线折叠并从两端剥离。主体为空时追问“你想上架的具体产品名/型号是什么？”。颜色、语言、包装、SKU、retry、revision、日期不入 slug；同产品同市场跨天与返工复用目录。
+
+```text
+图片：MainNNN-NN.png（SKU 仅在用户明说时使用）
+Docx：YYYYMMDD-{slug}-NNN.docx
+批次：图片与 Docx 独立批次；返工只修改点名槽位批次
+组装：新文档按每槽位当前最新成功资产；失败槽位写“生成失败”
+```
+
+manifest schema v6 证据模板：
+
+```json
+{
+  "agent_name": "<IDENTITY 名字>",
+  "product_slug": "<品牌型号-国家码>",
+  "market_country_code": "US",
+  "drive_path_segments": ["<agent_name>", "电商需求", "Listing", "<slug>"],
+  "delivery": {
+    "directory_chain": [{"name":"<name>","type":"folder","token":"<token>","parent_token":"<parent-token>"}],
+    "product_folder_token": "<token>",
+    "folder": {"token":"<token>","permalink":"https://..."},
+    "docx": {
+      "token": "<docx-token>",
+      "permalink": "https://...",
+      "docx_filename": "YYYYMMDD-{slug}-NNN.docx",
+      "docx_batch": 1
+    }
+  },
+  "images": [{"slot":1,"asset_filename":"Main001-01.png","image_batch":1}]
+}
+```
+
+validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效。Docx 模式聊天只发链接；card 模式不伪造目录证据。

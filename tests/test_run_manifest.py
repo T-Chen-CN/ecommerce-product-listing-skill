@@ -37,7 +37,7 @@ class ManifestCliTest(unittest.TestCase):
             else:
                 image = path.parent / f"image-{n}.png"
                 image.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
-                slot.update(status="success", file=str(image), provider_error=None)
+                slot.update(status="success", file=str(image), provider_error=None, asset_filename=f"Main{n:03d}-01.png", image_batch=1)
                 data["tokens"][str(n)] = {"image_key": f"img_fixture_{n}"}
                 if mode == "docx":
                     data["tokens"][str(n)]["file_token"] = f"file_fixture_{n}"
@@ -54,16 +54,16 @@ class ManifestCliTest(unittest.TestCase):
         path.write_text(json.dumps(data))
         return data
 
-    def test_init_uses_schema_v5_without_post_qa_fields(self):
+    def test_init_uses_schema_v6_without_post_qa_fields(self):
         with tempfile.TemporaryDirectory() as td:
             path = self.init(td)
             data = json.loads(path.read_text())
-            self.assertEqual(data["schema_version"], 5)
+            self.assertEqual(data["schema_version"], 6)
             self.assertNotIn("qa", data)
             self.assertEqual(set(data["delivery"]) & {"deliverable_slots", "failed_slots"}, {"deliverable_slots", "failed_slots"})
             self.assertNotIn("rejected_slots", data["delivery"])
             self.assertTrue(all("qa_label" not in x and "hard_reject_reason" not in x for x in data["images"]))
-            expected_slot_fields = {"slot", "purpose", "prompt", "status", "file", "provider_error"}
+            expected_slot_fields = {"slot", "purpose", "prompt", "status", "file", "provider_error", "asset_filename", "image_batch"}
             self.assertTrue(all(set(slot) == expected_slot_fields for slot in data["images"]))
 
     def test_success_and_failed_are_jointly_final(self):

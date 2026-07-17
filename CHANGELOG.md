@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.10.0
+
+- 固定 Listing 路径为 `/{agent_name}/电商需求/Listing/{slug}/`；agent_name 仅取当前工作区 IDENTITY.md 名字字段，目录由 Skill 自动逐层幂等创建。
+- 恢复并收紧品牌型号原样 + ISO 大写国家码 slug、空 token/root fallback 防护及 JSON stdout/stderr 隔离合同。
+- 图片采用 `MainNNN-NN`、Docx 采用 `YYYYMMDD-{slug}-NNN.docx`，批次独立；返工只推进点名槽位。
+- manifest 文档合同升级 schema v6，补充目录链、产品目录、文件名与批次证据及拒绝案例。
+- 延续 v2.9 的生成后直接交付规则，不恢复生成后审查、等级判断或由审查触发的重做。
+
 ## v2.9.0
 
 - 保留生图前 Pre-QA 分类路由；彻底取消图片生成后的视觉质量审核。
