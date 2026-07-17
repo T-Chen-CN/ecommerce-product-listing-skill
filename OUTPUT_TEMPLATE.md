@@ -64,9 +64,10 @@
 旧 schema 清单不能直接 mutation/validate，必须用 `init --force` 重建为当前 schema。
 
 ```bash
-python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr
-python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-mode docx
-python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count 3 --confirmed-by-user
+python3 scripts/delivery_config.py resolve --config "$ECOMMERCE_LISTING_DELIVERY_CONFIG" > route.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-route-file route.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-route-file route.json
+python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count 3 --confirmed-by-user --delivery-route-file route.json
 ```
 
 所有 mutation 携带同一次读取所得的完整 identity：
@@ -122,11 +123,12 @@ python3 scripts/run_manifest.py validate run-manifest.json --delivery
 
 成功图片按序号附图或插入文档；失败序号只写“生成失败”，不附原因分析、质量分级或修改建议。
 
-## 7. Docx / 图文卡片分流
+## 7. Docx / Interactive Card 持久化分流
 
 - **docx**：成功图片记录 `file_token` + `image_key`；失败槽位不记录 token。
-- **card**：成功图片只记录 `image_key`；失败槽位不记录 token；不得残留 Docx 证据。
-- 飞书操作前先做版本对齐读取与 capability preflight。
+- **interactive_card**：成功图片只记录 `image_key`；失败槽位不记录 token；不得残留 Docx 证据。
+- 正常任务直接使用 `scripts/delivery_config.py resolve`；仅配置缺失、配置损坏、版本不兼容、失效或实际调用失败时 bootstrap/诊断，不得重复 preflight。
+- 显式改路必须带用户明确确认，来源为 `explicit_user_override`；禁止静默降级。`preview_images` 不是正式交付。
 
 ```text
 📄 完整版：<docx-permalink>
@@ -147,7 +149,7 @@ Docx：YYYYMMDD-{slug}-NNN.docx
 组装：新文档按每槽位当前最新成功资产；失败槽位写“生成失败”
 ```
 
-manifest schema v7 证据模板：
+manifest schema v8 证据模板：
 
 ```json
 {
@@ -185,4 +187,4 @@ manifest schema v7 证据模板：
 }
 ```
 
-validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效，以及目录解析证据内部不一致（resolution/匹配数/页数与 created 、created_token）。Docx 模式聊天只发链接；card 模式不伪造目录证据。
+validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效，以及目录解析证据内部不一致（resolution/匹配数/页数与 created 、created_token）。Docx 模式聊天只发链接；interactive_card 模式不伪造目录证据。

@@ -2,7 +2,7 @@
 name: ecommerce-product-listing-skill
 description: "Use when producing or revising localized ecommerce listing copy, product-image plans, generated product images, or Feishu delivery artifacts."
 metadata:
-  version: "2.11.0"
+  version: "2.12.0"
 ---
 
 # 跨境电商上架内容生产
@@ -54,8 +54,8 @@ manifest 记录 `localization_policy`、`target_language` 与 `docx_language_mod
 先声明 `task_scope=content|image|full`。content 使用 `expected_count=0`；image/full 创建动态图片合同。
 
 ```bash
-python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-mode docx
-python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-mode docx
+python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-route-file route.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-route-file route.json
 python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count N --confirmed-by-user
 python3 scripts/run_manifest.py init run-manifest.json --plan-mode revision --expected-count N --confirmed-by-user
 ```
@@ -92,12 +92,14 @@ set-delivery / timing / finalize / validate / select-retry
 - `failed` 槽位按原序号标记“生成失败”，保留 provider 错误事实，不做分析、不触发质量补图或重做。
 - 不输出颜色等级、生成后审核报告或修改建议。
 
-## 5. 交付路由
+## 5. 持久化飞书交付路由
 
-- 飞书渠道完整成品在 `lark-cli` 已认证且 capability preflight 通过时默认走 Docx；聊天框只发链接。
-- Docx 模式：成功图片需 `file_token` + `image_key`；失败槽位不上传 token，文档中按序号写“生成失败”。
-- card 模式：成功图片需 `image_key`；失败槽位按序号写“生成失败”；禁止残留 Docx 证据。
-- 同一 Docx 写操作有序；不同 Docx 和独立 IM 上传可有界并发。
+- `scripts/delivery_config.py` 维护无凭据 schema v1 配置，命令为 `bootstrap`、`status`、`resolve`、`record-success`、`invalidate`。默认正式路线是 `docx`；另一正式路线是 `interactive_card`；`preview_images` 只用于用户明确要求的散图预览，不是正式路线。
+- 首次安装，或配置缺失、配置损坏、版本不兼容、已失效时，才做 lark-cli 身份、Docx/云盘/插图能力和最小调用检查，再用 `bootstrap` 保存非敏感结果。运行时不得重复全量 preflight。
+- 正常任务直接 `resolve`，把输出保存为 route JSON，再用 `init --delivery-route-file route.json`。来源只能是 `skill_config`、`bootstrap_result` 或 `explicit_user_override`。
+- 实际调用失败时先诊断：临时错误有限重试原路线；认证/权限错误停止并重新授权；配置错误重新 bootstrap。Docx 不可用时，只有用户针对本次任务明确确认，才可用 `explicit_user_override` 临时改为 `interactive_card`；禁止静默降级，且不修改持久默认值。
+- `docx`：成功图片需 `file_token` + `image_key`，聊天只发链接。`interactive_card`：成功图片需 `image_key`，禁止残留 Docx/目录证据。失败槽位均按序号写“生成失败”。
+- 成功后调用 `record-success`；认证、权限或资源失效时调用 `invalidate`。同一 Docx 写操作有序；不同 Docx 和独立 IM 上传可有界并发。
 
 ## 6. 最终验收
 
@@ -156,10 +158,10 @@ python3 scripts/run_manifest.py validate run-manifest.json --delivery
 - 返工只修改点名槽位批次，其他槽位批次与成功资产保持不变。
 - latest-per-slot 的唯一含义是：**新文档按每槽位当前最新成功资产**组装；某槽位没有成功资产时写“生成失败”。不建立替代谱系。
 
-manifest 目录证据采用 **schema v7**。字段至少包括：`agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`；每个图片槽位记录 `images[].asset_filename` 与 `images[].image_batch`。schema v3–v6 运行清单必须 `init --force` 重建为 v7。
+manifest 目录证据采用 **schema v8**。字段至少包括：`agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`；每个图片槽位记录 `images[].asset_filename` 与 `images[].image_batch`。schema v3–v7 运行清单必须 `init --force` 重建为 v8。
 
 `delivery.directory_chain[]` 每层需携带目录解析证据：`name`、`type`、`token`、`parent_token`、`resolution=reused|created`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`（带时区）。
 
-`validate --delivery` 必须拒绝：空 token、占位 token、目录名称/type/父子关系不一致、路径段不等于固定路径、产品目录 token 或 folder permalink 缺失、Docx/图片文件名不匹配、批次非正整数、国家码非 ISO 大写格式；`resolution` 缺失或非 `reused|created`；`reused` 时首次匹配数不为 1、`created=true` 或 `created_token` 非空；`created` 时三阶段计数不满足 0/0/1、`created_token` 与最终 token 不一致；任一阶段精确匹配数大于 1；执行阶段的 `pages_scanned_*` 不是正整数。card 模式不伪造目录证据；未创建 Docx/目录时对应字段必须为空且不得声称已完成目录交付。
+`validate --delivery` 必须拒绝：空 token、占位 token、目录名称/type/父子关系不一致、路径段不等于固定路径、产品目录 token 或 folder permalink 缺失、Docx/图片文件名不匹配、批次非正整数、国家码非 ISO 大写格式；`resolution` 缺失或非 `reused|created`；`reused` 时首次匹配数不为 1、`created=true` 或 `created_token` 非空；`created` 时三阶段计数不满足 0/0/1、`created_token` 与最终 token 不一致；任一阶段精确匹配数大于 1；执行阶段的 `pages_scanned_*` 不是正整数。interactive_card 模式不伪造目录证据；未创建 Docx/目录时对应字段必须为空且不得声称已完成目录交付。
 
 manifest 只证明本次受控流程内部自洽，不证明飞书远端当前绝对真实。同一父目录出现多个精确同名目录时必须停止交付，输出候选 token，由用户显式选定 canonical 目录后再单独迁移清理。

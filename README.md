@@ -1,6 +1,6 @@
 # ecommerce-product-listing-skill
 
-当前版本：v2.11.0
+当前版本：v2.12.0
 
 用于跨境电商上架文案、本地化内容、产品图计划、图生图生产与飞书交付。
 
@@ -11,6 +11,7 @@
 - `SKILL.md`：运行判断与关键红线。
 - `QUALITY_GATE.md`：最终结构、事实与交付证据检查。
 - `OUTPUT_TEMPLATE.md`：具体产物格式。
+- `scripts/delivery_config.py`：持久化、无凭据的飞书正式交付路由 CLI。
 - `scripts/run_manifest.py`：动态、并发安全的 manifest 受控 CLI。
 - `CHANGELOG.md`：版本历史。
 - `tests/`：契约与 CLI 测试。
@@ -22,14 +23,26 @@ python3 -m unittest discover -s tests -v
 python3 ~/.npm-global/lib/node_modules/openclaw/skills/skill-creator/scripts/quick_validate.py .
 ```
 
+## 飞书交付初始化与日常调用
+
+首次安装，或配置缺失、配置损坏、版本不兼容、失效时，验证环境后执行 `bootstrap`；不要保存 token/secret。正常任务不得重复 preflight，直接 `resolve`：
+
+```bash
+python3 scripts/delivery_config.py bootstrap --config /safe/runtime/delivery.json --evidence-json '{"docx_verified":true}'
+python3 scripts/delivery_config.py status --config /safe/runtime/delivery.json
+python3 scripts/delivery_config.py resolve --config /safe/runtime/delivery.json > route.json
+```
+
+正式路线只有 `docx` 与 `interactive_card`；`preview_images` 不属于正式交付。实际调用失败才诊断。任何降级必须由用户明确确认，使用 `explicit_user_override`，禁止静默降级；成功后 `record-success`，认证/权限/资源失效后 `invalidate`。
+
 ## Manifest 示例
 
 ```bash
 # 泛化产品图请求：默认完整 9 图
-python3 scripts/run_manifest.py init run.json --plan-mode default_full
+python3 scripts/run_manifest.py init run.json --plan-mode default_full --delivery-route-file route.json
 
 # 已确认的 N 图定制任务
-python3 scripts/run_manifest.py init run.json --plan-mode custom --expected-count N --confirmed-by-user
+python3 scripts/run_manifest.py init run.json --plan-mode custom --expected-count N --confirmed-by-user --delivery-route-file route.json
 
 # 最终验收
 python3 scripts/run_manifest.py validate run.json --delivery
@@ -45,4 +58,4 @@ python3 scripts/run_manifest.py validate run.json --delivery
 
 固定路径为 `/{agent_name}/电商需求/Listing/{slug}/`。`agent_name` 仅从 `IDENTITY.md` 的“名字”字段读取，缺失 hard fail，不用 `open_id` / `agent id` 兜底。Skill 以 `(parent_token, exact_name)` 为目录身份，在单机跨进程文件锁内完整分页列举直属子项：1 个精确匹配复用，0 个二次查后创建，>1 个阻断；创建后重新列举并验证唯一匹配且 token 等于创建返回 token。验证非空非占位 token、名称/type/parent，禁止 root fallback，JSON 捕获隔离 stderr。
 
-slug 为品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；同产品同市场跨天与返工复用。图片使用 `MainNNN-NN`（SKU 仅在用户明说时使用），Docx 使用 `YYYYMMDD-{slug}-NNN.docx`，两者独立批次。schema v7 记录 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`（含 `resolution`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`）、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`、`images[].asset_filename`、`images[].image_batch`。validate 拒绝空 token、占位 token、父子关系不一致、文件名不匹配，以及 reused/created 证据不一致。Docx 模式聊天只发链接；card 不伪造目录证据。
+slug 为品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；同产品同市场跨天与返工复用。图片使用 `MainNNN-NN`（SKU 仅在用户明说时使用），Docx 使用 `YYYYMMDD-{slug}-NNN.docx`，两者独立批次。schema v8 记录 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`（含 `resolution`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`）、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`、`images[].asset_filename`、`images[].image_batch`。validate 拒绝空 token、占位 token、父子关系不一致、文件名不匹配，以及 reused/created 证据不一致。Docx 模式聊天只发链接；interactive_card 不伪造目录证据。

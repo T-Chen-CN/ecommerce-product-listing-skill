@@ -23,7 +23,7 @@ class SkillContractTest(unittest.TestCase):
         self.assertRegex(frontmatter, r'(?m)^description: "Use when .*"$')
         self.assertNotRegex(frontmatter, r'(?m)^description: .*v2\.8\.0')
         self.assertNotRegex(frontmatter, r"(?m)^version:")
-        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.11\.0\"$")
+        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.12\.0\"$")
 
     def test_markdown_fences_are_balanced(self):
         for name in DOCS + ["README.md", "CHANGELOG.md"]:
@@ -32,7 +32,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_version_is_consistent(self):
         for name, text in [("SKILL", self.skill), ("README", self.readme), ("CHANGELOG", self.changelog)]:
-            self.assertRegex(text, r"v?2\.11\.0", name)
+            self.assertRegex(text, r"v?2\.12\.0", name)
 
     def test_default_full_is_nine_images_but_custom_count_is_dynamic(self):
         joined = "\n".join([self.skill, self.gate, self.template])
@@ -102,9 +102,20 @@ class SkillContractTest(unittest.TestCase):
         self.assertNotIn("set-short-delivery-approval", joined)
         self.assertNotIn("short_delivery_override", joined)
 
+    def test_v212_persistent_delivery_routing_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in ["scripts/delivery_config.py", "bootstrap", "status", "resolve", "record-success", "invalidate", "skill_config", "explicit_user_override", "--delivery-route-file", "schema v8"]:
+            self.assertIn(phrase, joined, phrase)
+        for phrase in ["配置缺失", "配置损坏", "版本不兼容", "实际调用", "用户明确确认", "不得重复", "禁止静默降级"]:
+            self.assertIn(phrase, joined, phrase)
+        for route in ["docx", "interactive_card", "preview_images"]:
+            self.assertIn(route, joined, route)
+        self.assertNotIn("--delivery-mode", joined)
+        self.assertNotRegex(joined, r"(?<!interactive_)\bcard 模式")
+
     def test_delivery_modes_and_docx_batch_rule_are_consistent(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["--delivery-mode", "docx", "card", "failed_slots", "生成失败"]:
+        for phrase in ["--delivery-route-file", "docx", "interactive_card", "failed_slots", "生成失败"]:
             self.assertIn(phrase, joined, phrase)
         self.assertNotIn("每次跑 Skill 都 +1", joined)
         self.assertNotIn("每次跑都 +1", joined)
@@ -156,7 +167,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_v210_manifest_v6_directory_evidence_contract(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["schema v7", "agent_name", "product_slug", "market_country_code", "drive_path_segments", "delivery.directory_chain", "delivery.product_folder_token", "delivery.folder.permalink", "delivery.docx.docx_filename", "delivery.docx.docx_batch", "images[].asset_filename", "images[].image_batch"]:
+        for phrase in ["schema v8", "agent_name", "product_slug", "market_country_code", "drive_path_segments", "delivery.directory_chain", "delivery.product_folder_token", "delivery.folder.permalink", "delivery.docx.docx_filename", "delivery.docx.docx_batch", "images[].asset_filename", "images[].image_batch"]:
             self.assertIn(phrase, joined, phrase)
         for rejection in ["空 token", "占位 token", "父子关系不一致", "文件名不匹配"]:
             self.assertIn(rejection, joined, rejection)
@@ -185,7 +196,7 @@ class SkillContractTest(unittest.TestCase):
     def test_v210_delivery_mode_contract_and_no_post_qa(self):
         operational = "\n".join([self.skill, self.gate, self.template, self.readme])
         self.assertIn("聊天只发链接", operational)
-        self.assertIn("card", operational)
+        self.assertIn("interactive_card", operational)
         self.assertIn("不伪造目录证据", operational)
         for forbidden in ["Post-QA", "审核触发重做", "质量评级", "replacement"]:
             self.assertNotIn(forbidden, operational, forbidden)

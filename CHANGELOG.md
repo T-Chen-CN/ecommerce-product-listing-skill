@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.12.0
+
+- 新增 `scripts/delivery_config.py` schema v1：`bootstrap`、`status`、`resolve`、`record-success`、`invalidate`，文件锁与原子写入，拒绝凭据字段。
+- 默认持久路线为 `docx`；正式路线仅 `docx|interactive_card`，`preview_images` 不构成正式交付。
+- manifest 升级 schema v8，`init --delivery-route-file` 消费受控解析证据；移除 `--delivery-mode` 自由选路，v3–v7 用 `init --force` 重建。
+- 日常任务直接解析配置，不重复 bootstrap preflight；配置或实际调用失败才诊断。未经用户当前任务明确确认，禁止静默降级；显式覆盖不改持久默认。
+
+
 ## v2.11.0
 
 - 新增 `scripts/ensure_feishu_folder.py`：以 `(parent_token, exact_name)` 为目录身份，在文件锁（锁键 `sha256(parent_token + NUL + name)`）下完整分页列举直属子项；1 个复用、0 个二次查后创建、>1 个阻断；创建后重新列举并验证唯一匹配且 token 等于创建返回 token。
