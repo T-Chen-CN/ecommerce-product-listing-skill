@@ -14,6 +14,8 @@ MUTATIONS = {"set-facts", "set-image-plan", "put-module", "update-slot", "set-to
 class FinalReviewSecurityTest(unittest.TestCase):
     def cli(self, *args, check=True):
         args = list(map(str, args))
+        if args and args[0] == "init" and "--delivery-mode" not in args:
+            args += ["--delivery-mode", "card"]
         if args and args[0] in MUTATIONS and len(args) > 1 and Path(args[1]).exists() and not any(x in args for x in ("--revision", "--from-current")):
             d = json.loads(Path(args[1]).read_text())
             args += ["--manifest-id", d["manifest_id"], "--generation", str(d["generation"]), "--revision", str(d["revision"])]
@@ -142,13 +144,13 @@ class FinalReviewSecurityTest(unittest.TestCase):
                 self.cli("init", p)
                 self.assertIn("prompt", self.cli("set-image-plan", p, "--json", payload, check=False).stderr)
 
-    def test_force_rebuilds_old_schema_as_v5_and_rejects_bad_identity_types(self):
+    def test_force_rebuilds_old_schema_as_v6_and_rejects_bad_identity_types(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "run.json"
             p.write_text(json.dumps({"schema_version": 4, "generation": 7, "revision": 12, "legacy": "anything"}))
             self.cli("init", p, "--force")
             data = json.loads(p.read_text())
-            self.assertEqual((data["schema_version"], data["generation"], data["revision"]), (5, 8, 13))
+            self.assertEqual((data["schema_version"], data["generation"], data["revision"]), (6, 8, 13))
             for field, value in (("generation", True), ("revision", "12"), ("generation", 0), ("revision", -1)):
                 p.write_text(json.dumps({"schema_version": 4, "generation": 7, "revision": 12, field: value}))
                 self.assertNotEqual(self.cli("init", p, "--force", check=False).returncode, 0)

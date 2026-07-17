@@ -67,11 +67,19 @@
 
 ## 11. 生成后直接交付
 
+- 普通图片名为 `MainNNN-NN`；SKU 仅在用户明说时使用。返工只修改点名槽位批次。
+- latest-per-slot 表达为“新文档按每槽位当前最新成功资产”；无成功资产的槽位写“生成失败”，不创建替代谱系。
+
 - 不检查产品还原度、文字准确性、手指、光照、构图或其他画面瑕疵。
 - 不输出生成后审核报告、颜色等级或修改建议。
 - 交付清单按图片计划原序号展示：`图片 NN` 或 `图片 NN：生成失败`。
 
 ## 12. Manifest
+
+- 目录证据使用 schema v6，包含 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`，图片槽位包含 `images[].asset_filename`、`images[].image_batch`。
+- `agent_name` 必须来自当前工作区 `IDENTITY.md` 的“名字”字段；缺失即 hard fail，不得用 `open_id` 或 `agent id` 兜底。
+- 每层 token 必须非空且非占位；拒绝空 token、占位 token、root fallback、名称/type/父子关系不一致、文件名不匹配与非正批次。
+- JSON 捕获须隔离 stderr，stdout 必须是可解析的单一 JSON；空输出、混入日志或非零退出均拒绝。
 
 - 动态槽位精确匹配 `expected_count`；`plan_mode` 为 default_full/custom/revision。
 - 子任务只用受控 CLI，不手改 JSON。
@@ -81,12 +89,19 @@
 
 ## 13. Docx
 
+- 固定路径为 `/{agent_name}/电商需求/Listing/{slug}/`；Skill 须自动逐层查询、幂等创建并回读名称、`type=folder`、`parent`，禁止要求用户人工预建。
+- slug 使用品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；whitespace 转横线，删除禁用字符，折叠并剥离横线；主体为空须追问具体产品名/型号。
+- 颜色、语言、包装、SKU、retry、revision、日期不入 slug；同产品同市场跨天与返工复用目录。
+- Docx 命名 `YYYYMMDD-{slug}-NNN.docx`；Docx 与图片采用独立批次。
+
 - 章节镜像本次输出范围，不放空章。
 - 非中文市场双语项逐项相邻。
 - 同一 Docx 写操作有序；图片按动态槽位顺序插入。
 - 成功槽位用 `file_token` 插入；失败槽位仅写“生成失败”。
 
 ## 14. 卡片
+
+- card 模式不伪造目录证据；未实际创建目录或 Docx 时，相应 token/permalink/文件名必须为空。
 
 - card 模式成功槽位要求 `image_key` 和发送证据。
 - 失败槽位不得有 token，并按原序号写“生成失败”。

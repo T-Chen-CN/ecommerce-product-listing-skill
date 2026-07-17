@@ -23,7 +23,7 @@ class SkillContractTest(unittest.TestCase):
         self.assertRegex(frontmatter, r'(?m)^description: "Use when .*"$')
         self.assertNotRegex(frontmatter, r'(?m)^description: .*v2\.8\.0')
         self.assertNotRegex(frontmatter, r"(?m)^version:")
-        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.9\.0\"$")
+        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.10\.0\"$")
 
     def test_markdown_fences_are_balanced(self):
         for name in DOCS + ["README.md", "CHANGELOG.md"]:
@@ -32,7 +32,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_version_is_consistent(self):
         for name, text in [("SKILL", self.skill), ("README", self.readme), ("CHANGELOG", self.changelog)]:
-            self.assertRegex(text, r"v?2\.9\.0", name)
+            self.assertRegex(text, r"v?2\.10\.0", name)
 
     def test_default_full_is_nine_images_but_custom_count_is_dynamic(self):
         joined = "\n".join([self.skill, self.gate, self.template])
@@ -130,6 +130,48 @@ class SkillContractTest(unittest.TestCase):
     def test_auxiliary_files_are_loaded_conditionally(self):
         self.assertIn("按任务条件读取", self.skill)
         self.assertNotIn("强制扩展规则", self.skill)
+
+    def test_v210_directory_and_identity_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in ["/{agent_name}/电商需求/Listing/{slug}/", "IDENTITY.md", "名字", "hard fail", "逐层查询", "幂等创建", "禁止要求用户人工预建", "名称", "type", "parent"]:
+            self.assertIn(phrase, joined, phrase)
+        self.assertIn("open_id", joined)
+        self.assertIn("agent id", joined)
+
+    def test_v210_slug_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template])
+        for phrase in ["品牌型号原样", "ISO 3166-1 alpha-2", "whitespace", "折叠", "剥离", "具体产品名/型号", "颜色", "语言", "包装", "SKU", "retry", "revision", "日期", "跨天", "返工", "复用"]:
+            self.assertIn(phrase, joined, phrase)
+
+    def test_v210_empty_token_and_json_capture_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template])
+        for phrase in ["非空", "占位", "root fallback", "stderr", "JSON"]:
+            self.assertIn(phrase, joined, phrase)
+
+    def test_v210_asset_and_batch_naming_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template])
+        for phrase in ["MainNNN-NN", "YYYYMMDD-{slug}-NNN", "独立批次", "返工只修改点名槽位批次", "新文档按每槽位当前最新成功资产", "生成失败", "SKU 仅在用户明说时使用"]:
+            self.assertIn(phrase, joined, phrase)
+        self.assertNotIn("replacement", "\n".join([self.skill, self.gate, self.template, self.readme]))
+
+    def test_v210_manifest_v6_directory_evidence_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in ["schema v6", "agent_name", "product_slug", "market_country_code", "drive_path_segments", "delivery.directory_chain", "delivery.product_folder_token", "delivery.folder.permalink", "delivery.docx.docx_filename", "delivery.docx.docx_batch", "images[].asset_filename", "images[].image_batch"]:
+            self.assertIn(phrase, joined, phrase)
+        for rejection in ["空 token", "占位 token", "父子关系不一致", "文件名不匹配"]:
+            self.assertIn(rejection, joined, rejection)
+        for field in ['"parent_token"', '"folder":', '"docx":', '"docx_filename"', '"docx_batch"']:
+            self.assertIn(field, self.template, field)
+        for stale_field in ['"parent":', '"folder_permalink"']:
+            self.assertNotIn(stale_field, self.template, stale_field)
+
+    def test_v210_delivery_mode_contract_and_no_post_qa(self):
+        operational = "\n".join([self.skill, self.gate, self.template, self.readme])
+        self.assertIn("聊天只发链接", operational)
+        self.assertIn("card", operational)
+        self.assertIn("不伪造目录证据", operational)
+        for forbidden in ["Post-QA", "审核触发重做", "质量评级", "replacement"]:
+            self.assertNotIn(forbidden, operational, forbidden)
 
     def test_known_template_typos_are_absent(self):
         self.assertNotIn("㮐输出", self.template)

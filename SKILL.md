@@ -2,7 +2,7 @@
 name: ecommerce-product-listing-skill
 description: "Use when producing or revising localized ecommerce listing copy, product-image plans, generated product images, or Feishu delivery artifacts."
 metadata:
-  version: "2.9.0"
+  version: "2.10.0"
 ---
 
 # 跨境电商上架内容生产
@@ -11,7 +11,7 @@ metadata:
 
 按用户本次要求生产可直接上架的文案、图片或交付物，不擅自扩大范围。事实真实性高于营销完整度；未知参数标记“未提供 / 需确认”，不得猜测。
 
-图片流程只保留生图前的 Pre-QA。生成后不做视觉质量审核、不判断产品还原度、文字准确性或画面瑕疵，也不输出质量评级与修改建议。生成成功按序号直接交付；生成失败按对应序号如实标记“生成失败”。
+图片流程只保留生图前的 Pre-QA。生成后不做视觉质量审核、不判断产品还原度、文字准确性或画面瑕疵，也不输出质量分级与修改建议。生成成功按序号直接交付；生成失败按对应序号如实标记“生成失败”。
 
 ## 按任务条件读取
 
@@ -113,3 +113,41 @@ python3 scripts/run_manifest.py validate run-manifest.json --delivery
 - `deliverable_slots`、`failed_slots`、token 与所选交付模式一致。
 
 验收失败时只修复结构、文件或交付证据；不得添加生成后质量判断，也不得隐藏生成失败。
+
+
+## 7. 飞书 Listing 目录合同
+
+固定交付路径为 `/{agent_name}/电商需求/Listing/{slug}/`。
+
+### 7.1 Agent 名与目录创建
+
+- `agent_name` 只能从当前工作区 `IDENTITY.md` 的“名字”字段读取；字段缺失、空白或解析失败必须 **hard fail**。禁止用 `open_id`、`agent id` 或任何运行时标识兜底。
+- Skill 自动从根目录开始逐层查询，并对 `{agent_name}`、`电商需求`、`Listing`、`{slug}` 做幂等创建；已存在即复用，不得重复创建，也禁止要求用户人工预建。
+- 每层查询结果都须验证名称、`type=folder` 与 `parent` 关系；创建后立即回读并做同样验证。不得仅凭搜索命中或 token 存在就继续。
+
+### 7.2 Slug
+
+`slug={品牌型号原样规范化}-{ISO 3166-1 alpha-2 大写国家码}`。
+
+1. 主体只取用户给出的品牌型号原样，不改大小写、不音译。
+2. 所有 whitespace（空格、tab、换行、CR）替换为横线；连续横线折叠为一个，并从两端剥离。
+3. 删除文件系统禁用字符 `/ \ : * ? " < > |`，再执行一次横线折叠与剥离。
+4. 规范化前后的主体都必须非空；为空时追问“你想上架的具体产品名/型号是什么？”，不得生成仅含国家码的 slug。
+5. 颜色、语言、包装、SKU、retry、revision、日期均不进入 slug。SKU 仅在用户明说时用于图片资产名。
+6. 同产品同市场跨天、retry 与返工继续复用同一产品目录。
+
+### 7.3 防空 token 与 JSON 捕获
+
+- 每层 token、根 token 与 `product_folder_token` 均须为非空且不是 `null`、`none`、`undefined`、`TODO`、`<token>` 等占位值；禁止静默 root fallback。
+- CLI 的 JSON 捕获必须隔离 stderr：stdout 只接收并解析 JSON，stderr 单独保存或直通诊断。非 JSON、空输出、命令非零退出均 hard fail。
+
+## 8. 资产、批次与目录证据
+
+- 普通图片资产名使用 `MainNNN-NN`；SKU仅在用户明说时使用 SKU 前缀。`NNN` 是该槽位图片批次，`NN` 是槽位号。
+- Docx 文件名为 `YYYYMMDD-{slug}-NNN.docx`。Docx 批次与图片批次是独立批次，分别递增，不互相推导。
+- 返工只修改点名槽位批次，其他槽位批次与成功资产保持不变。
+- latest-per-slot 的唯一含义是：**新文档按每槽位当前最新成功资产**组装；某槽位没有成功资产时写“生成失败”。不建立替代谱系。
+
+manifest 目录证据采用 **schema v6**。字段至少包括：`agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`；每个图片槽位记录 `images[].asset_filename` 与 `images[].image_batch`。
+
+`validate --delivery` 必须拒绝：空 token、占位 token、目录名称/type/父子关系不一致、路径段不等于固定路径、产品目录 token 或 folder permalink 缺失、Docx/图片文件名不匹配、批次非正整数、国家码非 ISO 大写格式。card 模式不伪造目录证据；未创建 Docx/目录时对应字段必须为空且不得声称已完成目录交付。
