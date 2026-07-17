@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Concurrency-safe run manifest CLI for localized ecommerce listing work."""
-import argparse, copy, fcntl, json, math, os, re, stat, sys, tempfile, uuid
+import argparse, copy, fcntl, importlib.util, json, math, os, re, stat, sys, tempfile, uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -293,7 +293,7 @@ def structural_errors(data):
     delivery_route=data.get("delivery_route")
     if delivery_route not in {"docx", "interactive_card"}:errors.append("delivery_route must be docx or interactive_card")
     source=data.get("delivery_route_source")
-    if source not in {"skill_config", "bootstrap_result", "explicit_user_override"}:errors.append("delivery_route_source must be skill_config, bootstrap_result, or explicit_user_override")
+    if source not in {"skill_config", "explicit_user_override"}:errors.append("delivery_route_source must be skill_config or explicit_user_override")
     if data.get("delivery_config_schema_version") != 1:errors.append("delivery_config_schema_version must equal 1")
     override=data.get("delivery_override")
     if source == "explicit_user_override":
@@ -357,6 +357,7 @@ def structural_errors(data):
         if isinstance(delivery.get("folder"),dict):errors.extend(unknown_errors(delivery["folder"],FOLDER_FIELDS,"delivery.folder"))
         if isinstance(delivery.get("card"),dict):errors.extend(unknown_errors(delivery["card"],CARD_FIELDS,"delivery.card"))
         if delivery_route == "docx":
+            if isinstance(delivery.get("card"),dict) and (delivery["card"].get("message_id") is not None or delivery["card"].get("send_success") is not False):errors.append("docx delivery must not contain card evidence")
             chain=delivery.get("directory_chain")
             if not isinstance(chain,list):errors.append("delivery.directory_chain must be an array")
             else:
@@ -371,9 +372,9 @@ def structural_errors(data):
         else:
             for field in ("directory_chain","product_folder_token"):
                 if field in delivery:errors.append(f"interactive_card delivery must not contain delivery.{field}")
-            if isinstance(delivery.get("docx"),dict):
-                for field in ("docx_filename","docx_batch"):
-                    if field in delivery["docx"]:errors.append(f"interactive_card delivery must not contain delivery.docx.{field}")
+            if delivery.get("docx") != {"token":None,"permalink":None}:errors.append("interactive_card delivery must not contain any docx evidence")
+            if delivery.get("folder") != {"permalink":None}:errors.append("interactive_card delivery must not contain any folder evidence")
+            if any(isinstance(t,dict) and "file_token" in t for t in data.get("tokens",{}).values()):errors.append("interactive_card delivery must not contain file_token evidence")
         for field in ("deliverable_slots", "failed_slots"):
             values = delivery.get(field)
             if not isinstance(values, list) or not all(is_int(v) and v >= 1 for v in values): errors.append(f"delivery.{field} must be positive integer array")
@@ -443,16 +444,17 @@ def cmd_init(args):
     if args.target_only_approved_by_user:
         args.monolingual=True; args.monolingual_confirmation=args.target_only_confirmation
     target, policy = infer_localization(args); mode=policy["docx_language_mode"]
-    try: route_evidence=load(args.delivery_route_file)
-    except (OSError,json.JSONDecodeError) as exc: raise ValueError(f"invalid --delivery-route-file: {exc}") from exc
-    reject_unknown(route_evidence,{"delivery_route","delivery_route_source","delivery_config_schema_version","delivery_override"},"delivery route")
-    route=route_evidence.get("delivery_route");source=route_evidence.get("delivery_route_source");override=route_evidence.get("delivery_override")
-    if route not in {"docx","interactive_card"}:raise ValueError("delivery_route must be docx or interactive_card; preview_images is not formal delivery")
-    if source not in {"skill_config","bootstrap_result","explicit_user_override"}:raise ValueError("delivery_route_source is not controlled")
-    if route_evidence.get("delivery_config_schema_version") != 1:raise ValueError("delivery_config_schema_version must equal 1")
-    if source == "explicit_user_override":
-        if not isinstance(override,dict) or override.get("delivery_route") != route or not str(override.get("confirmation_text","")).strip() or not is_timezone_datetime(override.get("recorded_at")):raise ValueError("explicit_user_override requires valid delivery_override user evidence")
-    elif override is not None:raise ValueError("delivery_override must be null unless source is explicit_user_override")
+    module_path=Path(__file__).with_name("delivery_config.py")
+    spec=importlib.util.spec_from_file_location("delivery_config",module_path)
+    delivery_config=importlib.util.module_from_spec(spec);spec.loader.exec_module(delivery_config)
+    config=delivery_config.load_config(Path(args.delivery_config))
+    if not delivery_config.is_current(config):raise ValueError("delivery config is invalidated or expired; bootstrap required")
+    route=config["default_delivery_route"];source="skill_config";override=None
+    if args.delivery_route_override:
+        confirmation=(args.delivery_route_override_confirmation or "").strip()
+        if not confirmation:raise ValueError("delivery route override requires --delivery-route-override-confirmation")
+        route=args.delivery_route_override;source="explicit_user_override"
+        override={"delivery_route":route,"confirmation_text":confirmation,"recorded_at":now()}
     slug=None
     if route == "docx":
         missing=[flag for flag,value in (("--agent-name",args.agent_name),("--product-name",args.product_name),("--country-code",args.country_code)) if not isinstance(value,str) or not value.strip()]
@@ -465,8 +467,11 @@ def cmd_init(args):
             if not args.force: raise ValueError("manifest already exists; use --force")
             old = load(path)
             if not isinstance(old,dict):raise ValueError("existing manifest must be an object")
-            if old.get("schema_version") == SCHEMA_VERSION:check_schema(old)
-            elif old.get("schema_version") not in {3,4,5,6,7}:raise ValueError("--force can rebuild only schema v3-v7 or current v8 manifest")
+            if old.get("schema_version") == SCHEMA_VERSION:
+                try: check_schema(old)
+                except ValueError: pass
+                else: raise ValueError("valid current manifest cannot be overwritten")
+            elif old.get("schema_version") not in {3,4,5,6,7}:raise ValueError("--force can rebuild only schema v3-v7 or invalid current v8 manifest")
             old_revision,generation=old.get("revision"),old.get("generation")
             if not is_int(old_revision) or old_revision<0:raise ValueError("existing revision must be a non-negative integer")
             if not is_int(generation) or generation<1:raise ValueError("existing generation must be a positive integer")
@@ -732,14 +737,11 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
             except (ValueError,KeyError):errors.append("delivery.docx.docx_filename date and created_at must be valid")
             if match.group(2)!=data["product_slug"]:errors.append("delivery.docx.docx_filename slug must match product_slug")
             if is_int(batch) and int(match.group(3))!=batch:errors.append("delivery.docx.docx_filename batch must match docx_batch")
-    if content_only:
-        if images or data["tokens"] or state["deliverable_slots"] or state["failed_slots"]:errors.append("content scope must not contain image contract or tokens")
-        if state["card"].get("send_success") or state["card"].get("message_id"):errors.append("content scope must not require or retain card evidence")
-        return errors
+    if content_only and (images or data["tokens"] or state["deliverable_slots"] or state["failed_slots"]):errors.append("content scope must not contain image contract or tokens")
     if mode=="interactive_card":
         if any(isinstance(t,dict) and t.get("file_token") for t in tokens.values()) or state["docx"].get("token") or state["docx"].get("permalink") or state["folder"].get("permalink"):errors.append("interactive_card delivery must not retain docx or folder evidence")
         card=state["card"]
-        if card.get("send_success") is not True or not is_identifier(card.get("message_id")):errors.append("image delivery requires card send_success true and message_id; message_id must be non-whitespace and at least 6 characters")
+        if card.get("send_success") is not True or not is_identifier(card.get("message_id")):errors.append("interactive_card delivery requires card send_success true and message_id; message_id must be non-whitespace and at least 6 characters")
     return errors
 
 
@@ -770,7 +772,7 @@ def add_mutation_args(p,json_arg=True):
 
 def parser():
     root=argparse.ArgumentParser(description=__doc__);sub=root.add_subparsers(dest="command",required=True)
-    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-route-file",required=True);p.add_argument("--agent-name");p.add_argument("--product-name");p.add_argument("--country-code");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
+    p=sub.add_parser("init");p.add_argument("manifest");p.add_argument("--task-scope",choices=TASK_SCOPES,default="image");p.add_argument("--plan-mode",choices=PLAN_MODES,default="default_full");p.add_argument("--expected-count",type=int);p.add_argument("--confirmed-by-user",action="store_true");p.add_argument("--requested-module",action="append",default=[]);p.add_argument("--delivery-config",required=True);p.add_argument("--delivery-route-override",choices=("docx","interactive_card"));p.add_argument("--delivery-route-override-confirmation");p.add_argument("--agent-name");p.add_argument("--product-name");p.add_argument("--country-code");p.add_argument("--market");p.add_argument("--platform");p.add_argument("--category");p.add_argument("--target-language");p.add_argument("--docx-language-mode",choices=LANGUAGE_MODES);p.add_argument("--monolingual",action="store_true");p.add_argument("--monolingual-confirmation");p.add_argument("--target-only-approved-by-user",action="store_true");p.add_argument("--target-only-confirmation");p.add_argument("--force",action="store_true");p.set_defaults(func=cmd_init)
     p=sub.add_parser("slug");p.add_argument("--product-name",required=True);p.add_argument("--country-code",required=True);p.set_defaults(func=cmd_slug)
     for name,func in (("set-facts",cmd_set_facts),("set-image-plan",cmd_set_image_plan),("set-delivery",cmd_set_delivery)):
         p=sub.add_parser(name);add_mutation_args(p);p.set_defaults(func=func)

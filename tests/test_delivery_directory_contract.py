@@ -18,8 +18,8 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
     def init(self, td, mode="docx", scope="image", name="咖啡 机/Pro", country="jp"):
         path = Path(td) / "run.json"
         route = Path(td) / f"route-{mode}.json"
-        route.write_text(json.dumps({"delivery_route":"docx" if mode == "docx" else "interactive_card","delivery_route_source":"skill_config","delivery_config_schema_version":1,"delivery_override":None}))
-        args = ["init", path, "--delivery-route-file", route, "--task-scope", scope]
+        route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"docx" if mode == "docx" else "interactive_card","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+        args = ["init", path, "--delivery-config", route, "--task-scope", scope]
         if mode == "docx":
             args += ["--agent-name", "Agent A", "--product-name", name, "--country-code", country]
         result = self.cli(*args)
@@ -95,8 +95,8 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
     def test_docx_init_requires_explicit_identity_but_card_does_not_fabricate_it(self):
         with tempfile.TemporaryDirectory() as td:
             route = Path(td) / "docx-route.json"
-            route.write_text(json.dumps({"delivery_route":"docx","delivery_route_source":"skill_config","delivery_config_schema_version":1,"delivery_override":None}))
-            missing = self.cli("init", Path(td) / "bad.json", "--delivery-route-file", route)
+            route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"docx","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+            missing = self.cli("init", Path(td) / "bad.json", "--delivery-config", route)
             self.assertNotEqual(missing.returncode, 0)
             self.assertIn("--agent-name", missing.stderr)
             card = self.init(td, mode="card")
@@ -306,8 +306,8 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
                 path = Path(td) / f"v{version}.json"
                 path.write_text(json.dumps({"schema_version": version, "generation": 2, "revision": 4}))
                 route = Path(td) / "route-card.json"
-                route.write_text(json.dumps({"delivery_route":"interactive_card","delivery_route_source":"skill_config","delivery_config_schema_version":1,"delivery_override":None}))
-                result = self.cli("init", path, "--force", "--delivery-route-file", route)
+                route.write_text(json.dumps({"schema_version":1,"default_delivery_route":"interactive_card","bootstrap_evidence":{"evidence_version":1,"capability_version":"test","docx_capable":True,"interactive_card_capable":True,"verified_at":"2026-01-01T00:00:00+00:00","expires_at":"2099-01-01T00:00:00+00:00"},"configured_at":"2026-01-01T00:00:00+00:00","last_success_at":None,"invalidated_at":None,"invalidation_reason":None}))
+                result = self.cli("init", path, "--force", "--delivery-config", route)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(json.loads(path.read_text())["schema_version"], 8)
 

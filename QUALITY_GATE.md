@@ -109,9 +109,9 @@
 
 ## 15. 飞书持久化路由
 
-- `scripts/delivery_config.py resolve` 的 route JSON 必须通过 `--delivery-route-file` 进入 schema v8 manifest；来源只允许 `skill_config`、`bootstrap_result`、`explicit_user_override`。
+- `run_manifest.py init --delivery-config` 直接严格读取持久配置；不接受 route result/bootstrap result。来源只允许 `skill_config` 或具备用户确认文本的 `explicit_user_override`。
 - 仅配置缺失、配置损坏、版本不兼容、失效或实际调用失败时进入 bootstrap/诊断；正常运行不得重复全量 preflight。
-- `docx` 降级为 `interactive_card` 必须有用户明确确认并记录 `delivery_override`；禁止静默降级。`preview_images` 不得满足正式交付。
+- `docx` 降级为 `interactive_card` 必须有用户明确确认并记录 `delivery_override`；禁止静默降级。`preview_images` 与正式 `interactive_card` 严格隔离，不得满足或冒充正式交付。
 - 实际写入前读取版本对齐的 lark-doc 指引；`media-insert --help` 支持 `--selection-with-ellipsis` 时使用它。
 
 ## 16. 最终结论

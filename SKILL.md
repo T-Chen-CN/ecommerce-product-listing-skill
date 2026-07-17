@@ -54,8 +54,8 @@ manifest 记录 `localization_policy`、`target_language` 与 `docx_language_mod
 先声明 `task_scope=content|image|full`。content 使用 `expected_count=0`；image/full 创建动态图片合同。
 
 ```bash
-python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-route-file route.json
-python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-route-file route.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-config delivery-config.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-config delivery-config.json
 python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count N --confirmed-by-user
 python3 scripts/run_manifest.py init run-manifest.json --plan-mode revision --expected-count N --confirmed-by-user
 ```
@@ -94,9 +94,9 @@ set-delivery / timing / finalize / validate / select-retry
 
 ## 5. 持久化飞书交付路由
 
-- `scripts/delivery_config.py` 维护无凭据 schema v1 配置，命令为 `bootstrap`、`status`、`resolve`、`record-success`、`invalidate`。默认正式路线是 `docx`；另一正式路线是 `interactive_card`；`preview_images` 只用于用户明确要求的散图预览，不是正式路线。
+- `scripts/delivery_config.py` 维护无凭据 schema v1 配置，命令为 `bootstrap`、`status`、`resolve`、`record-success`、`invalidate`。默认正式路线是 `docx`；另一正式路线是 `interactive_card`；`preview_images` 只用于用户明确要求的普通散图预览，不是正式路线，也不得冒充正式 `interactive_card`。
 - 首次安装，或配置缺失、配置损坏、版本不兼容、已失效时，才做 lark-cli 身份、Docx/云盘/插图能力和最小调用检查，再用 `bootstrap` 保存非敏感结果。运行时不得重复全量 preflight。
-- 正常任务直接 `resolve`，把输出保存为 route JSON，再用 `init --delivery-route-file route.json`。来源只能是 `skill_config`、`bootstrap_result` 或 `explicit_user_override`。
+- 正常任务直接 `resolve`，把输出保存为 route JSON，再用 `init --delivery-config delivery-config.json`。来源只能是 `skill_config` 或 `explicit_user_override`。
 - 实际调用失败时先诊断：临时错误有限重试原路线；认证/权限错误停止并重新授权；配置错误重新 bootstrap。Docx 不可用时，只有用户针对本次任务明确确认，才可用 `explicit_user_override` 临时改为 `interactive_card`；禁止静默降级，且不修改持久默认值。
 - `docx`：成功图片需 `file_token` + `image_key`，聊天只发链接。`interactive_card`：成功图片需 `image_key`，禁止残留 Docx/目录证据。失败槽位均按序号写“生成失败”。
 - 成功后调用 `record-success`；认证、权限或资源失效时调用 `invalidate`。同一 Docx 写操作有序；不同 Docx 和独立 IM 上传可有界并发。

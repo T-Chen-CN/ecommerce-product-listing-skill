@@ -64,10 +64,9 @@
 旧 schema 清单不能直接 mutation/validate，必须用 `init --force` 重建为当前 schema。
 
 ```bash
-python3 scripts/delivery_config.py resolve --config "$ECOMMERCE_LISTING_DELIVERY_CONFIG" > route.json
-python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-route-file route.json
-python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-route-file route.json
-python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count 3 --confirmed-by-user --delivery-route-file route.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope content --target-language fr --delivery-config delivery-config.json
+python3 scripts/run_manifest.py init run-manifest.json --task-scope image --plan-mode default_full --delivery-config delivery-config.json
+python3 scripts/run_manifest.py init run-manifest.json --plan-mode custom --expected-count 3 --confirmed-by-user --delivery-config delivery-config.json
 ```
 
 所有 mutation 携带同一次读取所得的完整 identity：
@@ -188,3 +187,7 @@ manifest schema v8 证据模板：
 ```
 
 validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效，以及目录解析证据内部不一致（resolution/匹配数/页数与 created 、created_token）。Docx 模式聊天只发链接；interactive_card 模式不伪造目录证据。
+
+## 9. 正式路线与普通预览隔离
+
+`docx`、正式 `interactive_card` 和普通 `preview_images` 是三个互斥概念。普通预览不生成也不复用正式卡片 `message_id` 证据，不得冒充正式卡片；正式卡片不得携带 Docx/目录证据。manifest 只接受持久 `--delivery-config`，单次改路由必须使用 `--delivery-route-override` 与 `--delivery-route-override-confirmation`，且不修改持久默认值。

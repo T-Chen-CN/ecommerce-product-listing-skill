@@ -15,6 +15,7 @@ SCHEMA_VERSION = 1
 ROUTES = ("docx", "interactive_card")
 SENSITIVE_FRAGMENTS = ("token", "secret", "password", "credential", "api_key", "apikey")
 CONFIG_FIELDS = {"schema_version", "default_delivery_route", "bootstrap_evidence", "configured_at", "last_success_at", "invalidated_at", "invalidation_reason"}
+EVIDENCE_FIELDS = {"evidence_version", "capability_version", "docx_capable", "interactive_card_capable", "verified_at", "expires_at"}
 
 
 def now():
@@ -52,6 +53,11 @@ def atomic_save(path, data):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     except BaseException:
         try:
             os.unlink(temporary)
@@ -60,15 +66,35 @@ def atomic_save(path, data):
         raise
 
 
-def contains_secret(value):
-    if isinstance(value, dict):
-        for key, child in value.items():
-            normalized = str(key).lower().replace("-", "_")
-            if any(fragment in normalized for fragment in SENSITIVE_FRAGMENTS) or contains_secret(child):
-                return True
-    elif isinstance(value, list):
-        return any(contains_secret(child) for child in value)
-    return False
+def parse_time(value, field):
+    if not isinstance(value, str) or "T" not in value:
+        raise ValueError(f"{field} must be ISO datetime with timezone")
+    try:
+        result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field} must be ISO datetime with timezone") from exc
+    if result.tzinfo is None or result.utcoffset() is None:
+        raise ValueError(f"{field} must be ISO datetime with timezone")
+    return result
+
+
+def validate_evidence(value):
+    if not isinstance(value, dict):
+        raise ValueError("bootstrap_evidence must be an object")
+    if set(value) != EVIDENCE_FIELDS:
+        raise ValueError(f"bootstrap_evidence fields must equal {sorted(EVIDENCE_FIELDS)}")
+    if value["evidence_version"] != 1:
+        raise ValueError("bootstrap_evidence.evidence_version must equal 1")
+    if not isinstance(value["capability_version"], str) or not value["capability_version"].strip():
+        raise ValueError("bootstrap_evidence.capability_version must be non-empty")
+    for field in ("docx_capable", "interactive_card_capable"):
+        if not isinstance(value[field], bool):
+            raise ValueError(f"bootstrap_evidence.{field} must be bool")
+    verified = parse_time(value["verified_at"], "bootstrap_evidence.verified_at")
+    expires = parse_time(value["expires_at"], "bootstrap_evidence.expires_at")
+    if expires <= verified:
+        raise ValueError("bootstrap_evidence.expires_at must be later than verified_at")
+    return value
 
 
 def validate(data):
@@ -81,14 +107,25 @@ def validate(data):
         raise ValueError(f"unsupported delivery config schema_version; expected {SCHEMA_VERSION}")
     if data.get("default_delivery_route") not in ROUTES:
         raise ValueError("default_delivery_route must be docx or interactive_card")
-    if not isinstance(data.get("bootstrap_evidence"), dict) or contains_secret(data["bootstrap_evidence"]):
-        raise ValueError("bootstrap_evidence must be a credential-free object")
-    if not isinstance(data.get("configured_at"), str) or not data["configured_at"].strip():
-        raise ValueError("configured_at must be non-empty")
-    for field in ("last_success_at", "invalidated_at", "invalidation_reason"):
-        if data.get(field) is not None and (not isinstance(data[field], str) or not data[field].strip()):
-            raise ValueError(f"{field} must be a non-empty string or null")
+    validate_evidence(data.get("bootstrap_evidence"))
+    configured = parse_time(data.get("configured_at"), "configured_at")
+    for field in ("last_success_at", "invalidated_at"):
+        if data.get(field) is not None:
+            moment = parse_time(data[field], field)
+            if moment < configured: raise ValueError(f"{field} must not precede configured_at")
+    reason=data.get("invalidation_reason")
+    if reason is not None and (not isinstance(reason,str) or not reason.strip()): raise ValueError("invalidation_reason must be non-empty or null")
+    if (data.get("invalidated_at") is None) != (reason is None): raise ValueError("invalidated_at and invalidation_reason must be present together")
     return data
+
+
+def is_current(data, at=None):
+    """Return whether a structurally valid config is usable for a new run."""
+    validate(data)
+    at = at or datetime.now(timezone.utc)
+    return data["invalidated_at"] is None and parse_time(
+        data["bootstrap_evidence"]["expires_at"], "bootstrap_evidence.expires_at"
+    ) > at
 
 
 def load_config(path):
@@ -107,17 +144,20 @@ def emit(value):
 
 def cmd_bootstrap(args):
     path = config_path(args)
-    try:
-        evidence = json.loads(args.evidence_json)
-    except json.JSONDecodeError as exc:
-        raise ValueError("--evidence-json must be valid JSON") from exc
-    if not isinstance(evidence, dict):
-        raise ValueError("--evidence-json must be an object")
-    if contains_secret(evidence):
-        raise ValueError("bootstrap evidence must not contain tokens, secrets, passwords, credentials, or api keys")
-    data = {"schema_version": SCHEMA_VERSION, "default_delivery_route": args.delivery_route, "bootstrap_evidence": evidence, "configured_at": now(), "last_success_at": None, "invalidated_at": None, "invalidation_reason": None}
+    evidence = {"evidence_version": 1, "capability_version": args.capability_version,
+                "docx_capable": True, "interactive_card_capable": True,
+                "verified_at": now(), "expires_at": args.expires_at}
+    data = {"schema_version": SCHEMA_VERSION, "default_delivery_route": args.delivery_route,
+            "bootstrap_evidence": evidence, "configured_at": now(), "last_success_at": None,
+            "invalidated_at": None, "invalidation_reason": None}
     validate(data)
     with locked(path):
+        if path.exists():
+            try: existing = load_config(path)
+            except (ValueError, OSError): pass
+            else:
+                if is_current(existing):
+                    raise ValueError("current delivery config already exists; bootstrap is create-only")
         atomic_save(path, data)
     emit(data)
 
@@ -179,7 +219,8 @@ def parser():
         command.add_argument("--config")
     p = sub.choices["bootstrap"]
     p.add_argument("--delivery-route", choices=ROUTES, default="docx")
-    p.add_argument("--evidence-json", default="{}")
+    p.add_argument("--capability-version", required=True)
+    p.add_argument("--expires-at", required=True)
     p.set_defaults(func=cmd_bootstrap)
     sub.choices["status"].set_defaults(func=cmd_status)
     p = sub.choices["resolve"]

@@ -104,7 +104,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_v212_persistent_delivery_routing_contract(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["scripts/delivery_config.py", "bootstrap", "status", "resolve", "record-success", "invalidate", "skill_config", "explicit_user_override", "--delivery-route-file", "schema v8"]:
+        for phrase in ["scripts/delivery_config.py", "bootstrap", "status", "resolve", "record-success", "invalidate", "skill_config", "explicit_user_override", "--delivery-config", "schema v8"]:
             self.assertIn(phrase, joined, phrase)
         for phrase in ["配置缺失", "配置损坏", "版本不兼容", "实际调用", "用户明确确认", "不得重复", "禁止静默降级"]:
             self.assertIn(phrase, joined, phrase)
@@ -115,7 +115,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_delivery_modes_and_docx_batch_rule_are_consistent(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["--delivery-route-file", "docx", "interactive_card", "failed_slots", "生成失败"]:
+        for phrase in ["docx", "interactive_card", "failed_slots", "生成失败"]:
             self.assertIn(phrase, joined, phrase)
         self.assertNotIn("每次跑 Skill 都 +1", joined)
         self.assertNotIn("每次跑都 +1", joined)

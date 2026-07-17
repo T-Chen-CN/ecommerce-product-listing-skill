@@ -2,9 +2,14 @@
 
 ## v2.12.0
 
+- manifest schema v8 直接严格加载持久 delivery config；删除可手写 route result/bootstrap_result 入口，显式用户覆盖作为独立受控参数。
+- bootstrap 为 create-only；仅已有配置失效或损坏时可重新初始化，并发初始化仅允许一次成功。
+- bootstrap evidence 使用封闭、非敏感、带时区且有合理有效期的能力 schema；原子保存 fsync 文件与父目录。
+- content 也必须提供所选正式交付路由的真实证据；Docx 与 interactive card 双向严格隔离。
+
 - 新增 `scripts/delivery_config.py` schema v1：`bootstrap`、`status`、`resolve`、`record-success`、`invalidate`，文件锁与原子写入，拒绝凭据字段。
 - 默认持久路线为 `docx`；正式路线仅 `docx|interactive_card`，`preview_images` 不构成正式交付。
-- manifest 升级 schema v8，`init --delivery-route-file` 消费受控解析证据；移除 `--delivery-mode` 自由选路，v3–v7 用 `init --force` 重建。
+- manifest 升级 schema v8，`init --delivery-config` 直接严格读取持久配置；移除 `--delivery-mode` 自由选路，v3–v7 用 `init --force` 重建。
 - 日常任务直接解析配置，不重复 bootstrap preflight；配置或实际调用失败才诊断。未经用户当前任务明确确认，禁止静默降级；显式覆盖不改持久默认。
 
 
@@ -414,4 +419,3 @@ v2.6 修根子：把 Docx 章节从「结构模板」改为「输出范围镜像
 ### Notes
 - 生成 slug 由 agent 从用户自然语言中抽品牌+型号后自动生成，用户可改"抽出的短语"但不接受自定义 slug 规则。支持中文 / 英文 / 数字 / 横线。
 - Preflight 询问不设超时；用户随时回复继续 / 拒绝退回。
-

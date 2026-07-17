@@ -25,24 +25,23 @@ python3 ~/.npm-global/lib/node_modules/openclaw/skills/skill-creator/scripts/qui
 
 ## 飞书交付初始化与日常调用
 
-首次安装，或配置缺失、配置损坏、版本不兼容、失效时，验证环境后执行 `bootstrap`；不要保存 token/secret。正常任务不得重复 preflight，直接 `resolve`：
+首次安装，或配置缺失、配置损坏、版本不兼容、失效时，验证环境后执行 `bootstrap`；不要保存 token/secret。正常任务不得重复全量 preflight，直接由 manifest 读取持久配置：
 
 ```bash
-python3 scripts/delivery_config.py bootstrap --config /safe/runtime/delivery.json --evidence-json '{"docx_verified":true}'
+python3 scripts/delivery_config.py bootstrap --config /safe/runtime/delivery.json --delivery-route docx --capability-version 1.0.0 --expires-at 2026-08-17T00:00:00+08:00
 python3 scripts/delivery_config.py status --config /safe/runtime/delivery.json
-python3 scripts/delivery_config.py resolve --config /safe/runtime/delivery.json > route.json
 ```
 
-正式路线只有 `docx` 与 `interactive_card`；`preview_images` 不属于正式交付。实际调用失败才诊断。任何降级必须由用户明确确认，使用 `explicit_user_override`，禁止静默降级；成功后 `record-success`，认证/权限/资源失效后 `invalidate`。
+正式路线只有 `docx` 与 `interactive_card`；普通 `preview_images` 不属于正式交付，不能冒充正式卡片。实际调用失败才诊断。任何降级必须由用户明确确认，使用 `explicit_user_override`，禁止静默降级；成功后 `record-success`，认证/权限/资源失效后 `invalidate`。
 
 ## Manifest 示例
 
 ```bash
 # 泛化产品图请求：默认完整 9 图
-python3 scripts/run_manifest.py init run.json --plan-mode default_full --delivery-route-file route.json
+python3 scripts/run_manifest.py init run.json --plan-mode default_full --delivery-config delivery-config.json
 
 # 已确认的 N 图定制任务
-python3 scripts/run_manifest.py init run.json --plan-mode custom --expected-count N --confirmed-by-user --delivery-route-file route.json
+python3 scripts/run_manifest.py init run.json --plan-mode custom --expected-count N --confirmed-by-user --delivery-config delivery-config.json
 
 # 最终验收
 python3 scripts/run_manifest.py validate run.json --delivery
