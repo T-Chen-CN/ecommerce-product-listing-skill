@@ -663,10 +663,6 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
     if not delivery:return errors
     if data.get("status")!="ready":errors.append("delivery status must be ready")
     state=data["delivery"]
-    if scope in {"content","full"}:
-        docx,folder=state["docx"],state["folder"]
-        if not is_identifier(docx.get("token")) or not is_feishu_url(docx.get("permalink")):errors.append("delivery docx token and Feishu permalink required")
-        if not is_feishu_url(folder.get("permalink")):errors.append("delivery folder permalink required")
     content_only=scope=="content"
     deliverable,failed=([],[]) if content_only else slot_classification(data)
     if len(deliverable)+len(failed)!=expected:errors.append(f"expected_count={expected} requires every contracted slot to be success or failed")

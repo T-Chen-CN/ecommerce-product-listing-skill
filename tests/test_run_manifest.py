@@ -174,6 +174,15 @@ class ManifestCliTest(unittest.TestCase):
             result = self.cli("validate", path, check=False)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_docx_and_interactive_card_delivery_evidence_are_isolated(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = self.init(td, mode="docx", count=1)
+            data = self.ready(path, mode="docx")
+            data["delivery"]["card"] = {"message_id": None, "send_success": False}
+            path.write_text(json.dumps(data))
+            result = self.cli("validate", path, "--delivery", check=False)
+            self.assertNotIn("card send_success", result.stderr)
+
     def test_card_forbids_file_tokens_and_docx_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             path = self.init(td)
