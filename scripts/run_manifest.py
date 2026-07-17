@@ -738,8 +738,8 @@ def validation_errors(data,delivery=False,manifest_dir=Path.cwd()):
         return errors
     if mode=="interactive_card":
         if any(isinstance(t,dict) and t.get("file_token") for t in tokens.values()) or state["docx"].get("token") or state["docx"].get("permalink") or state["folder"].get("permalink"):errors.append("interactive_card delivery must not retain docx or folder evidence")
-    card=state["card"]
-    if card.get("send_success") is not True or not is_identifier(card.get("message_id")):errors.append("image delivery requires card send_success true and message_id; message_id must be non-whitespace and at least 6 characters")
+        card=state["card"]
+        if card.get("send_success") is not True or not is_identifier(card.get("message_id")):errors.append("image delivery requires card send_success true and message_id; message_id must be non-whitespace and at least 6 characters")
     return errors
 
 
