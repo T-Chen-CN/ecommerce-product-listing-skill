@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.9.0
+
+- 保留生图前 Pre-QA 分类路由；彻底取消图片生成后的视觉质量审核。
+- 删除颜色质量评级、生成后审核报告、瑕疵判断与修改建议。
+- 生成成功按图片计划序号直接交付；生成失败按原序号标记“生成失败”。
+- manifest 升级到 schema v5，删除根级审核对象、槽位审核标签和审核 mutation；最终验收不再要求审核模式、审核时间或审核槽位记录。
+- 交付合同改为 `deliverable_slots` + `failed_slots`：成功槽位校验图片与 token，失败槽位禁止 token。
+
 ## v2.8.0
 
 - 图片计划支持 `default_full`、`custom`、`revision` 与动态 `expected_count`；默认完整方案仍为 9 张。

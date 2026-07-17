@@ -1,40 +1,37 @@
 # Ecommerce Product Listing Quality Gate
 
-最终交付前只检查本次请求覆盖的模块，不用未请求模块阻塞交付。
+最终交付前只检查本次请求覆盖的模块。图片只做生图前 Pre-QA；生成后不做视觉质量审核。
 
 ## 1. 范围路由
 
-- `task_scope=content`：expected_count=0，只验内容与 Docx/目录；不要求图片、QA、token、card。
-- `task_scope=image`：验图片合同、QA、token 与卡片。
-- `task_scope=full`：同时验完整内容双语与图片交付。
+- `task_scope=content`：expected_count=0，只验内容与 Docx/目录，不要求图片、token 或卡片。
+- `task_scope=image`：验图片生成状态、token 与卡片。
+- `task_scope=full`：同时验内容与图片交付。
+- default_full 默认完整方案 9 张；custom/revision 使用确认后的动态 `expected_count`。
 
-- 按需与组合任务只产出点名模块；revision 只改指定模块或槽位。
-- 泛化产品图请求：`plan_mode=default_full`，默认完整方案 9 张。
-- SKU 图、卖点图、指定图型：`plan_mode=custom`；返工槽位：`plan_mode=revision`。
-- custom/revision 数量不明确时，先给槽位清单 + 总数，用户确认后记 `confirmed_by_user=true`。
+## 2. 数量与状态契约
 
-## 2. 数量契约
-
-- default_full 验收 9/9；custom/revision 验收 N/N，N 来自 `expected_count`。
-- hard reject 不得变成少交理由，必须补替代槽位。
-- 短交付先由可信调用方验证用户消息，再用 `set-short-delivery-approval` 记录确认原文、author/provider/channel/message_id 与 actual/expected；finalize 只能消费已有审批。
+- 每个约定槽位最终只能是 `success` 或 `failed`。
+- `success + failed = expected_count`；失败不伪装成成功，也不从序号中消失。
+- `success` 按序号直接交付；`failed` 按序号标记“生成失败”。
+- 不因生成后的视觉判断触发补图、替换图或重做。
 
 ## 3. 真实性
 
 - 未提供的材质、尺寸、等级、功能、包装、认证不得写成事实。
-- 冲突时按“参数表 > 用户确认 > 图片清晰可见 > 市场惯例”处理。
+- 冲突按“参数表 > 用户确认 > 图片清晰可见 > 市场惯例”处理。
 - 绝对承诺、官方背书和医疗功效必须有证据。
 
 ## 4. 本地化与中文对照
 
-- `docx_text` 模块登记到 requested_docx_modules 并逐项验收；internal/non_text 不参与正文双语验收。非中文完整 Docx 默认目标语言原文 + 逐项紧邻中文对照。
-- 中文市场不重复对照。
-- manifest 记录 localization_policy / target_language / docx_language_mode；显式语言优先，未给语言时按 market 判断中文与否，非中文通用默认 bilingual。`--monolingual` 需要用户确认；中文不重复。数据区分 `source_text` / `zh_reference` / `render_text`。
-- 图片实际渲染文字只允许目标市场语言；中文对照不得传入生图 prompt，prompt 只能取 `render_text`。
+- `docx_text` 模块登记到 requested_docx_modules 并逐项验收；internal/non_text 不参与正文双语验收。
+- 非中文完整 Docx 默认目标语言原文 + 逐项紧邻中文对照；中文市场不重复。
+- 数据区分 `source_text` / `zh_reference` / `render_text`。
+- 中文对照不得传入生图 prompt，prompt 只能取 `render_text`。
 
 ## 5. 标题
 
-默认 3 个：平台主标题、SEO 长标题、简洁备选。关键词自然覆盖，不写未知参数，不把广告口号冒充搜索标题。
+默认 3 个：平台主标题、SEO 长标题、简洁备选。关键词自然覆盖，不写未知参数。
 
 ## 6. 卖点与详情
 
@@ -46,7 +43,7 @@
 
 - SKU 覆盖用户提供的全部颜色、款式、尺寸、版本和套装。
 - SKU 图保持同布局、角度和构图，只改变确认过的变体。
-- 完整关键词模块默认至少 30 个并覆盖品类、功能、场景、人群、属性和本地搜索词。
+- 完整关键词模块默认至少 30 个，并覆盖品类、功能、场景、人群、属性和本地搜索词。
 
 ## 8. 图片计划与提示词
 
@@ -57,50 +54,50 @@
 
 ## 9. Pre-QA
 
-- 产品视觉图：加入参考池，参考图池全传，不因光线或构图主观剔除。
+- 产品视觉图：加入参考池并全传，不因光线或构图主观剔除。
 - 信息素材图：提取事实，不传生图工具。
 - 无关图：向用户说明并确认。
 
-## 10. 图生图
+## 10. 图生图与重试
 
-- 真实产品图默认使用 `image-provider-gateway >= 0.1.0` 的图生图入口。
-- 每个请求使用 edit 模式并带产品视觉参考图；文生图必须有用户明确批准。
-- 成功槽位复用；结构化 retryable 错误只做单槽位重试，禁止整批重跑。
-- 并发按实际 N 与上游限制设置，不写死数量。
+- 真实产品图默认使用 `image-provider-gateway >= 0.1.0` 的 edit 模式并带参考图池。
+- 文生图必须有用户明确批准。
+- 成功槽位复用；仅结构化 retryable 错误允许单槽位重试，禁止整批重跑。
+- 重试结束即固定生成结果：成功直接交付，失败如实标记。
 
-## 11. Post-QA
+## 11. 生成后直接交付
 
-- 全部结果做 single-round 批审；默认 9 张即九图单轮批审，只有 🔴 候选二次复核。
-- hard reject：API/文件失败、损坏、严重跑题、安全占位、产品完全不可辨认。
-- soft pass：产品可辨认但有文字、手指、光照或构图瑕疵。
-- QA 是决策辅助，不替用户决策；🟡 图 ≥ 3 张时必须有汇总建议表。
+- 不检查产品还原度、文字准确性、手指、光照、构图或其他画面瑕疵。
+- 不输出生成后审核报告、颜色等级或修改建议。
+- 交付清单按图片计划原序号展示：`图片 NN` 或 `图片 NN：生成失败`。
 
 ## 12. Manifest
 
-- 动态槽位必须精确匹配 `expected_count`；`plan_mode` 为 default_full/custom/revision。
-- 子任务只用受控 CLI，不手改 JSON；replacement 必须在合同槽 rejected 后用 `add-replacement-slot` 创建并记录 `replaces_slot`。
-- 文件锁、保留 mode 的原子替换、深度 `schema_version` 校验、`manifest_id` / `generation` / `revision` 冲突防护不得绕过。相对图片路径以 manifest 父目录为基准；并发子任务 mutation 强制传 revision + manifest_id + generation。
-- 图片 scope 的 QA 记录 timezone datetime `reviewed_at`、`reviewed_slot_ids`、`reviewed_count`，覆盖所有最终 success/rejected/replacement 候选；timings、PNG/JPEG/WebP/GIF 与 token 证据完整。
+- 动态槽位精确匹配 `expected_count`；`plan_mode` 为 default_full/custom/revision。
+- 子任务只用受控 CLI，不手改 JSON。
+- manifest 不包含生成后审核字段；最终验收不要求审核模式、审核时间或审核槽位记录。
+- 文件锁、原子替换、schema 校验及 `manifest_id` / `generation` / `revision` 冲突防护不得绕过。
+- timings、PNG/JPEG/WebP/GIF 与成功槽位 token 证据完整；失败槽位不得保留 token。
 
 ## 13. Docx
 
 - 章节镜像本次输出范围，不放空章。
-- 非中文市场双语项逐项相邻，不能把整段中文集中放在文末。
-- 同一 Docx 写操作有序；图片按实际动态槽位顺序插入。
-- `file_token` 用于 Docx，`image_key` 用于 IM，两者用途不可混淆。
+- 非中文市场双语项逐项相邻。
+- 同一 Docx 写操作有序；图片按动态槽位顺序插入。
+- 成功槽位用 `file_token` 插入；失败槽位仅写“生成失败”。
 
 ## 14. 卡片
 
-- card 模式只发卡片，要求 `image_key` 和发送证据。
+- card 模式成功槽位要求 `image_key` 和发送证据。
+- 失败槽位不得有 token，并按原序号写“生成失败”。
 - 不得残留 `file_token`、Docx token/permalink 或目录 permalink。
-- hard-rejected 槽位不得进入卡片或保留 token。
 
 ## 15. 飞书 Preflight
 
 - 写入前读取与已安装版本对齐的 lark-doc 指引，再做 capability preflight。
-- `media-insert --help` 支持 `--selection-with-ellipsis` 时使用它；不因旧 reference 删除有效参数。
+- `media-insert --help` 支持 `--selection-with-ellipsis` 时使用它。
 - 未认证且用户拒绝授权时，明确退回图文卡片，不静默中断。
 
 ## 16. 最终结论
 
-统一执行 `validate --delivery`。只有 N/N 或有用户明确短交付 override 才可完成；失败时只修正受影响模块/槽位，不减少约定数量，不隐藏 QA 或交付错误。
+统一执行 `validate --delivery`。全部约定槽位均已记录为成功或生成失败，且交付证据匹配时即可完成；不得加入生成后视觉判断。
