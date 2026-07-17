@@ -1,6 +1,6 @@
 # ecommerce-product-listing-skill
 
-当前版本：v2.10.0
+当前版本：v2.11.0
 
 用于跨境电商上架文案、本地化内容、产品图计划、图生图生产与飞书交付。
 
@@ -41,8 +41,8 @@ python3 scripts/run_manifest.py validate run.json --delivery
 
 清单不包含生成后审核字段。成功槽位保留真实图片和交付 token；失败槽位记录 provider 错误并进入 `failed_slots`，不得拥有 token。旧 schema 运行清单需执行 `init --force` 重建。
 
-## v2.10 目录与命名摘要
+## v2.11 目录与命名摘要
 
-固定路径为 `/{agent_name}/电商需求/Listing/{slug}/`。`agent_name` 仅从 `IDENTITY.md` 的“名字”字段读取，缺失 hard fail，不用 `open_id` / `agent id` 兜底。Skill 自动逐层查询并幂等创建，禁止要求用户人工预建；验证非空非占位 token、名称/type/parent，禁止 root fallback，JSON 捕获隔离 stderr。
+固定路径为 `/{agent_name}/电商需求/Listing/{slug}/`。`agent_name` 仅从 `IDENTITY.md` 的“名字”字段读取，缺失 hard fail，不用 `open_id` / `agent id` 兜底。Skill 以 `(parent_token, exact_name)` 为目录身份，在单机跨进程文件锁内完整分页列举直属子项：1 个精确匹配复用，0 个二次查后创建，>1 个阻断；创建后重新列举并验证唯一匹配且 token 等于创建返回 token。验证非空非占位 token、名称/type/parent，禁止 root fallback，JSON 捕获隔离 stderr。
 
-slug 为品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；同产品同市场跨天与返工复用。图片使用 `MainNNN-NN`（SKU 仅在用户明说时使用），Docx 使用 `YYYYMMDD-{slug}-NNN.docx`，两者独立批次。schema v6 记录 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`、`images[].asset_filename`、`images[].image_batch`。validate 拒绝空 token、占位 token、父子关系不一致和文件名不匹配。Docx 模式聊天只发链接；card 不伪造目录证据。
+slug 为品牌型号原样 + ISO 3166-1 alpha-2 大写国家码；同产品同市场跨天与返工复用。图片使用 `MainNNN-NN`（SKU 仅在用户明说时使用），Docx 使用 `YYYYMMDD-{slug}-NNN.docx`，两者独立批次。schema v7 记录 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`（含 `resolution`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`）、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`、`images[].asset_filename`、`images[].image_batch`。validate 拒绝空 token、占位 token、父子关系不一致、文件名不匹配，以及 reused/created 证据不一致。Docx 模式聊天只发链接；card 不伪造目录证据。

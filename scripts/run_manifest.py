@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 PLAN_MODES = ("default_full", "custom", "revision")
 TASK_SCOPES = ("content", "image", "full")
 LANGUAGE_MODES = ("bilingual", "target_only", "chinese")
@@ -24,7 +24,7 @@ ROOT_FIELDS = {"schema_version","manifest_id","generation","revision","created_a
 IMAGE_FIELDS = {"slot","purpose","prompt","source_text","zh_reference","render_text","status","file","provider_error","asset_filename","image_batch"}
 PROVIDER_ERROR_FIELDS = {"code","message","retryable","provider","request_id","status"}
 DOCX_FIELDS = {"token","permalink","docx_filename","docx_batch"}; FOLDER_FIELDS={"token","permalink"}; CARD_FIELDS={"message_id","send_success"}
-DIRECTORY_ENTRY_FIELDS = {"name", "token", "type", "parent_token"}
+DIRECTORY_ENTRY_FIELDS = {"name", "token", "type", "parent_token", "resolution", "exact_match_count_first", "exact_match_count_second", "exact_match_count_after", "created", "created_token", "pages_scanned_first", "pages_scanned_second", "pages_scanned_after", "resolved_at"}
 TIMING_FIELDS={"seconds","recorded_at"}; MODULE_CONTRACT_FIELDS={"kind"}
 POLICY_FIELDS={"docx_language_mode","basis","override"}; OVERRIDE_FIELDS={"approved_by","confirmation_text","recorded_at"}
 ISO_ALPHA2 = set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split())
@@ -193,6 +193,58 @@ def prompt_contract_errors(value,path="value",target_language=None):
     return errors
 
 
+def directory_resolution_errors(value, path):
+    evidence_fields = DIRECTORY_ENTRY_FIELDS - {"name", "token", "type", "parent_token"}
+    errors = [f"{path}: missing resolution evidence fields: {sorted(evidence_fields - set(value))}"] if evidence_fields - set(value) else []
+    resolution = value.get("resolution")
+    if resolution not in {"reused", "created"}:
+        errors.append(f"{path}.resolution must be reused or created")
+
+    counts = {}
+    pages = {}
+    for stage in ("first", "second", "after"):
+        count_field = f"exact_match_count_{stage}"
+        pages_field = f"pages_scanned_{stage}"
+        count = value.get(count_field)
+        page_count = value.get(pages_field)
+        counts[stage] = count
+        pages[stage] = page_count
+        if stage == "first" or count is not None:
+            if not is_int(count) or count < 0:
+                errors.append(f"{path}.{count_field} must be a non-negative integer")
+            elif count > 1:
+                errors.append(f"{path}.{count_field} must not exceed 1")
+        if stage == "first" or page_count is not None:
+            if not is_int(page_count) or page_count < 1:
+                errors.append(f"{path}.{pages_field} must be a positive integer for an executed stage")
+        if (count is None) != (page_count is None):
+            errors.append(f"{path}: {stage} count and pages evidence must both be present or both be null")
+
+    created = value.get("created")
+    created_token = value.get("created_token")
+    if not isinstance(created, bool):
+        errors.append(f"{path}.created must be bool")
+    if resolution == "reused":
+        if counts["first"] != 1:
+            errors.append(f"{path}.exact_match_count_first must equal 1 for reused resolution")
+        if created is not False:
+            errors.append(f"{path}.created must be false for reused resolution")
+        if created_token is not None:
+            errors.append(f"{path}.created_token must be null for reused resolution")
+    elif resolution == "created":
+        if counts != {"first": 0, "second": 0, "after": 1}:
+            errors.append(f"{path}: created resolution requires exact match counts first=0, second=0, after=1")
+        if created is not True:
+            errors.append(f"{path}.created must be true for created resolution")
+        if not isinstance(created_token, str) or not created_token.strip():
+            errors.append(f"{path}.created_token must be a non-empty string for created resolution")
+        elif created_token != value.get("token"):
+            errors.append(f"{path}.created_token must equal token for created resolution")
+    if not is_timezone_datetime(value.get("resolved_at")):
+        errors.append(f"{path}.resolved_at must be datetime with timezone")
+    return errors
+
+
 def approval_override_errors(value,path):
     errors=unknown_errors(value,OVERRIDE_FIELDS,path)
     if not isinstance(value.get("approved_by"),str) or not value.get("approved_by","").strip():errors.append(f"{path}.approved_by must be non-empty string")
@@ -298,7 +350,10 @@ def structural_errors(data):
             else:
                 for i,entry in enumerate(chain):
                     if not isinstance(entry,dict):errors.append(f"delivery.directory_chain[{i}] must be object")
-                    else:errors.extend(unknown_errors(entry,DIRECTORY_ENTRY_FIELDS,f"delivery.directory_chain[{i}]"))
+                    else:
+                        entry_path=f"delivery.directory_chain[{i}]"
+                        errors.extend(unknown_errors(entry,DIRECTORY_ENTRY_FIELDS,entry_path))
+                        errors.extend(directory_resolution_errors(entry,entry_path))
             token=delivery.get("product_folder_token")
             if token is not None and not isinstance(token,str):errors.append("delivery.product_folder_token must be string or null")
         else:
@@ -389,7 +444,7 @@ def cmd_init(args):
             old = load(path)
             if not isinstance(old,dict):raise ValueError("existing manifest must be an object")
             if old.get("schema_version") == SCHEMA_VERSION:check_schema(old)
-            elif old.get("schema_version") not in {3,4,5}:raise ValueError("--force can rebuild only schema v3/v4/v5 or current v6 manifest")
+            elif old.get("schema_version") not in {3,4,5,6}:raise ValueError("--force can rebuild only schema v3/v4/v5/v6 or current v7 manifest")
             old_revision,generation=old.get("revision"),old.get("generation")
             if not is_int(old_revision) or old_revision<0:raise ValueError("existing revision must be a non-negative integer")
             if not is_int(generation) or generation<1:raise ValueError("existing generation must be a positive integer")

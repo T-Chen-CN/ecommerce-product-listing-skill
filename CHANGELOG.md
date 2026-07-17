@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.11.0
+
+- 新增 `scripts/ensure_feishu_folder.py`：以 `(parent_token, exact_name)` 为目录身份，在文件锁（锁键 `sha256(parent_token + NUL + name)`）下完整分页列举直属子项；1 个复用、0 个二次查后创建、>1 个阻断；创建后重新列举并验证唯一匹配且 token 等于创建返回 token。
+- 新增 `tests/test_ensure_feishu_folder.py`，覆盖复用、创建、并发竞争、分页、分页循环、畳形响应、重复目录、创建后 token 不一致、名称精确匹配、SubprocessJSONAdapter 的 stdout 隔离，以及两进程 spawn 只创建一次的并发合同。
+- manifest 升级到 **schema v7**：`delivery.directory_chain[]` 新增 `resolution`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at` 证据；v3–v6 必须 `init --force` 重建。
+- `validate --delivery` 新增：`reused` 必须 first=1、`created=false`、`created_token=null`；`created` 必须 first=0/second=0/after=1、`created_token` 与最终 token 一致；任一阶段精确匹配大于 1 阻断；执行阶段 `pages_scanned_*` 必须为正整数；`resolved_at` 必须带时区。
+- 重申重复同名目录处置：停止交付、输出候选 token、由用户选定 canonical 目录后再单独迁移清理；helper 不删除、不移动、不合并。
+- 保留 v2.10 固定路径与 slug/批次合同、v2.9 无生成后审查合同。
+
 ## v2.10.0
 
 - 固定 Listing 路径为 `/{agent_name}/电商需求/Listing/{slug}/`；agent_name 仅取当前工作区 IDENTITY.md 名字字段，目录由 Skill 自动逐层幂等创建。

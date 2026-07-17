@@ -54,11 +54,11 @@ class ManifestCliTest(unittest.TestCase):
         path.write_text(json.dumps(data))
         return data
 
-    def test_init_uses_schema_v6_without_post_qa_fields(self):
+    def test_init_uses_schema_v7_without_post_qa_fields(self):
         with tempfile.TemporaryDirectory() as td:
             path = self.init(td)
             data = json.loads(path.read_text())
-            self.assertEqual(data["schema_version"], 6)
+            self.assertEqual(data["schema_version"], 7)
             self.assertNotIn("qa", data)
             self.assertEqual(set(data["delivery"]) & {"deliverable_slots", "failed_slots"}, {"deliverable_slots", "failed_slots"})
             self.assertNotIn("rejected_slots", data["delivery"])

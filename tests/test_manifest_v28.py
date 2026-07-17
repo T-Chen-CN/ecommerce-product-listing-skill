@@ -64,13 +64,13 @@ class ManifestV28PreservedContractsTest(unittest.TestCase):
             self.assertEqual(d["expected_count"], 0)
             self.assertEqual(d["images"], [])
 
-    def test_force_rebuilds_v4_as_v6_with_monotonic_identity(self):
+    def test_force_rebuilds_v4_as_v7_with_monotonic_identity(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "run.json"
             p.write_text(json.dumps({"schema_version": 4, "generation": 7, "revision": 12, "legacy": True}))
             self.cli("init", p, "--force")
             d = json.loads(p.read_text())
-            self.assertEqual((d["schema_version"], d["generation"], d["revision"]), (6, 8, 13))
+            self.assertEqual((d["schema_version"], d["generation"], d["revision"]), (7, 8, 13))
 
     def test_update_slot_rejects_identity_fields_and_removed_qa_fields(self):
         with tempfile.TemporaryDirectory() as td:
