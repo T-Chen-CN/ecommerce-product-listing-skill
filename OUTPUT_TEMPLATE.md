@@ -147,7 +147,7 @@ Docx：YYYYMMDD-{slug}-NNN.docx
 组装：新文档按每槽位当前最新成功资产；失败槽位写“生成失败”
 ```
 
-manifest schema v6 证据模板：
+manifest schema v7 证据模板：
 
 ```json
 {
@@ -156,7 +156,22 @@ manifest schema v6 证据模板：
   "market_country_code": "US",
   "drive_path_segments": ["<agent_name>", "电商需求", "Listing", "<slug>"],
   "delivery": {
-    "directory_chain": [{"name":"<name>","type":"folder","token":"<token>","parent_token":"<parent-token>"}],
+    "directory_chain": [{
+      "name": "<name>",
+      "type": "folder",
+      "token": "<token>",
+      "parent_token": "<parent-token>",
+      "resolution": "reused",
+      "exact_match_count_first": 1,
+      "exact_match_count_second": null,
+      "exact_match_count_after": 1,
+      "created": false,
+      "created_token": null,
+      "pages_scanned_first": 1,
+      "pages_scanned_second": null,
+      "pages_scanned_after": 1,
+      "resolved_at": "2026-07-17T14:00:00+08:00"
+    }],
     "product_folder_token": "<token>",
     "folder": {"token":"<token>","permalink":"https://..."},
     "docx": {
@@ -170,4 +185,4 @@ manifest schema v6 证据模板：
 }
 ```
 
-validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效。Docx 模式聊天只发链接；card 模式不伪造目录证据。
+validate 拒绝空 token、占位 token、父子关系不一致、名称/type 错误、文件名不匹配、批次无效，以及目录解析证据内部不一致（resolution/匹配数/页数与 created 、created_token）。Docx 模式聊天只发链接；card 模式不伪造目录证据。

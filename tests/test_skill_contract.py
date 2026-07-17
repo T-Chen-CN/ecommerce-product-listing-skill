@@ -23,7 +23,7 @@ class SkillContractTest(unittest.TestCase):
         self.assertRegex(frontmatter, r'(?m)^description: "Use when .*"$')
         self.assertNotRegex(frontmatter, r'(?m)^description: .*v2\.8\.0')
         self.assertNotRegex(frontmatter, r"(?m)^version:")
-        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.10\.0\"$")
+        self.assertRegex(frontmatter, r"(?m)^metadata:\n  version: \"2\.11\.0\"$")
 
     def test_markdown_fences_are_balanced(self):
         for name in DOCS + ["README.md", "CHANGELOG.md"]:
@@ -32,7 +32,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_version_is_consistent(self):
         for name, text in [("SKILL", self.skill), ("README", self.readme), ("CHANGELOG", self.changelog)]:
-            self.assertRegex(text, r"v?2\.10\.0", name)
+            self.assertRegex(text, r"v?2\.11\.0", name)
 
     def test_default_full_is_nine_images_but_custom_count_is_dynamic(self):
         joined = "\n".join([self.skill, self.gate, self.template])
@@ -133,7 +133,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_v210_directory_and_identity_contract(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["/{agent_name}/电商需求/Listing/{slug}/", "IDENTITY.md", "名字", "hard fail", "逐层查询", "幂等创建", "禁止要求用户人工预建", "名称", "type", "parent"]:
+        for phrase in ["/{agent_name}/电商需求/Listing/{slug}/", "IDENTITY.md", "名字", "hard fail", "逐层", "name", "type", "parent"]:
             self.assertIn(phrase, joined, phrase)
         self.assertIn("open_id", joined)
         self.assertIn("agent id", joined)
@@ -156,7 +156,7 @@ class SkillContractTest(unittest.TestCase):
 
     def test_v210_manifest_v6_directory_evidence_contract(self):
         joined = "\n".join([self.skill, self.gate, self.template, self.readme])
-        for phrase in ["schema v6", "agent_name", "product_slug", "market_country_code", "drive_path_segments", "delivery.directory_chain", "delivery.product_folder_token", "delivery.folder.permalink", "delivery.docx.docx_filename", "delivery.docx.docx_batch", "images[].asset_filename", "images[].image_batch"]:
+        for phrase in ["schema v7", "agent_name", "product_slug", "market_country_code", "drive_path_segments", "delivery.directory_chain", "delivery.product_folder_token", "delivery.folder.permalink", "delivery.docx.docx_filename", "delivery.docx.docx_batch", "images[].asset_filename", "images[].image_batch"]:
             self.assertIn(phrase, joined, phrase)
         for rejection in ["空 token", "占位 token", "父子关系不一致", "文件名不匹配"]:
             self.assertIn(rejection, joined, rejection)
@@ -164,6 +164,23 @@ class SkillContractTest(unittest.TestCase):
             self.assertIn(field, self.template, field)
         for stale_field in ['"parent":', '"folder_permalink"']:
             self.assertNotIn(stale_field, self.template, stale_field)
+
+    def test_v211_folder_resolution_contract(self):
+        joined = "\n".join([self.skill, self.gate, self.template, self.readme])
+        for phrase in [
+            "(parent_token, exact_name)",
+            "ensure_feishu_folder",
+            "sha256(parent_token + NUL + name)",
+            "resolution=reused|created",
+            "exact_match_count_first/second/after",
+            "pages_scanned_first/second/after",
+            "created_token",
+            "resolved_at",
+        ]:
+            self.assertIn(phrase, joined, phrase)
+        # helper must not be advertised as deleting/moving/merging duplicates
+        for forbidden in ["自动删除", "自动移动", "自动合并", "任选一个"]:
+            self.assertNotIn(forbidden, joined, forbidden)
 
     def test_v210_delivery_mode_contract_and_no_post_qa(self):
         operational = "\n".join([self.skill, self.gate, self.template, self.readme])

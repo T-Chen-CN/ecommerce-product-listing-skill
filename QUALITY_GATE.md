@@ -76,9 +76,9 @@
 
 ## 12. Manifest
 
-- 目录证据使用 schema v6，包含 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`，图片槽位包含 `images[].asset_filename`、`images[].image_batch`。
+- 目录证据使用 schema v7，包含 `agent_name`、`product_slug`、`market_country_code`、`drive_path_segments`、`delivery.directory_chain`、`delivery.product_folder_token`、`delivery.folder.permalink`、`delivery.docx.docx_filename`、`delivery.docx.docx_batch`，图片槽位包含 `images[].asset_filename`、`images[].image_batch`。每条 `delivery.directory_chain[]` 每层需携带解析证据：`resolution=reused|created`、`exact_match_count_first/second/after`、`created`、`created_token`、`pages_scanned_first/second/after`、`resolved_at`（带时区）。
 - `agent_name` 必须来自当前工作区 `IDENTITY.md` 的“名字”字段；缺失即 hard fail，不得用 `open_id` 或 `agent id` 兜底。
-- 每层 token 必须非空且非占位；拒绝空 token、占位 token、root fallback、名称/type/父子关系不一致、文件名不匹配与非正批次。
+- 每层 token 必须非空且非占位；拒绝空 token、占位 token、root fallback、名称/type/父子关系不一致、文件名不匹配、非正批次；`reused` 时首次匹配不为 1 或 `created=true`/`created_token` 非空；`created` 时三阶段计数不满足 0/0/1，或 `created_token` 与最终 token 不一致；任一阶段精确匹配大于 1；执行阶段 `pages_scanned_*` 非正整数。
 - JSON 捕获须隔离 stderr，stdout 必须是可解析的单一 JSON；空输出、混入日志或非零退出均拒绝。
 
 - 动态槽位精确匹配 `expected_count`；`plan_mode` 为 default_full/custom/revision。

@@ -24,15 +24,34 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return path
 
-    def ready_docx(self, td):
-        path = self.init(td)
+    def directory_entry(self, name, token, parent_token, created=False):
+        evidence = {
+            "resolution": "created" if created else "reused",
+            "exact_match_count_first": 0 if created else 1,
+            "exact_match_count_second": 0 if created else None,
+            "exact_match_count_after": 1 if created else None,
+            "created": created,
+            "created_token": token if created else None,
+            "pages_scanned_first": 1,
+            "pages_scanned_second": 1 if created else None,
+            "pages_scanned_after": 1 if created else None,
+            "resolved_at": "2026-07-17T06:00:00+00:00",
+        }
+        return {"name": name, "token": token, "type": "folder", "parent_token": parent_token, **evidence}
+
+    def ready_docx(self, td, scope="image"):
+        path = self.init(td, scope=scope)
         data = json.loads(path.read_text())
+        if scope == "full":
+            data["requested_docx_modules"] = ["title"]
+            data["module_contracts"] = {"title": "docx_text"}
+            data["modules"] = {"title": {"source_text": "Title", "zh_reference": "标题", "render_text": "Title"}}
         slug = data["product_slug"]
         chain = [
-            {"name": "Agent A", "token": "fld_agent", "type": "folder", "parent_token": "root"},
-            {"name": "电商需求", "token": "fld_ecom", "type": "folder", "parent_token": "fld_agent"},
-            {"name": "Listing", "token": "fld_listing", "type": "folder", "parent_token": "fld_ecom"},
-            {"name": slug, "token": "fld_product", "type": "folder", "parent_token": "fld_listing"},
+            self.directory_entry("Agent A", "fld_agent", "root"),
+            self.directory_entry("电商需求", "fld_ecom", "fld_agent"),
+            self.directory_entry("Listing", "fld_listing", "fld_ecom"),
+            self.directory_entry(slug, "fld_product", "fld_listing", created=True),
         ]
         for image in data["images"]:
             n = image["slot"]
@@ -57,11 +76,11 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
     def validate_delivery(self, path):
         return self.cli("validate", path, "--delivery")
 
-    def test_init_schema_v6_records_docx_identity_and_empty_evidence(self):
+    def test_init_schema_v7_records_docx_identity_and_empty_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             path = self.init(td)
             data = json.loads(path.read_text())
-            self.assertEqual(data["schema_version"], 6)
+            self.assertEqual(data["schema_version"], 7)
             self.assertEqual(data["agent_name"], "Agent A")
             self.assertEqual(data["product_slug"], "咖啡-机Pro-JP")
             self.assertEqual(data["market_country_code"], "JP")
@@ -217,10 +236,10 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
             slug = data["product_slug"]
             data["delivery"].update(
                 directory_chain=[
-                    {"name": "Agent A", "token": "fld_agent", "type": "folder", "parent_token": "root"},
-                    {"name": "电商需求", "token": "fld_ecom", "type": "folder", "parent_token": "fld_agent"},
-                    {"name": "Listing", "token": "fld_listing", "type": "folder", "parent_token": "fld_ecom"},
-                    {"name": slug, "token": "fld_product", "type": "folder", "parent_token": "fld_listing"},
+                    self.directory_entry("Agent A", "fld_agent", "root"),
+                    self.directory_entry("电商需求", "fld_ecom", "fld_agent"),
+                    self.directory_entry("Listing", "fld_listing", "fld_ecom"),
+                    self.directory_entry(slug, "fld_product", "fld_listing", created=True),
                 ],
                 product_folder_token="fld_product",
                 folder={"token": "fld_product", "permalink": "https://docs.feishu.cn/drive/folder/fld_product"},
@@ -240,14 +259,51 @@ class DeliveryDirectoryContractTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("card delivery must not contain", result.stderr)
 
-    def test_force_rebuilds_v3_v4_v5_as_v6(self):
+    def test_directory_resolution_evidence_rejects_missing_invalid_ambiguous_and_inconsistent_values(self):
+        mutations = {
+            "missing": lambda e: e.pop("resolution"),
+            "unknown": lambda e: e.__setitem__("resolution", "found"),
+            "ambiguous_first": lambda e: e.__setitem__("exact_match_count_first", 2),
+            "ambiguous_second": lambda e: e.update(exact_match_count_second=2, pages_scanned_second=1),
+            "ambiguous_after": lambda e: e.update(exact_match_count_after=2, pages_scanned_after=1),
+            "negative_count": lambda e: e.__setitem__("exact_match_count_first", -1),
+            "zero_pages": lambda e: e.__setitem__("pages_scanned_first", 0),
+            "naive_time": lambda e: e.__setitem__("resolved_at", "2026-07-17T06:00:00"),
+            "reused_created": lambda e: e.__setitem__("created", True),
+            "reused_token": lambda e: e.__setitem__("created_token", e["token"]),
+            "created_first": lambda e: e.__setitem__("exact_match_count_first", 1),
+            "created_second": lambda e: e.__setitem__("exact_match_count_second", None),
+            "created_after": lambda e: e.__setitem__("exact_match_count_after", 0),
+            "created_false": lambda e: e.__setitem__("created", False),
+            "created_token_mismatch": lambda e: e.__setitem__("created_token", "fld_other"),
+            "missing_executed_pages": lambda e: e.__setitem__("pages_scanned_after", None),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
+                path, data = self.ready_docx(td)
+                entry = data["delivery"]["directory_chain"][3 if label.startswith("created") or label == "missing_executed_pages" else 0]
+                mutate(entry)
+                path.write_text(json.dumps(data, ensure_ascii=False))
+                result = self.validate_delivery(path)
+                self.assertNotEqual(result.returncode, 0, result.stderr)
+
+    def test_resolution_evidence_contract_applies_to_content_image_and_full_but_not_card(self):
+        for scope in ("image", "full"):
+            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as td:
+                path, _ = self.ready_docx(td, scope=scope)
+                self.assertEqual(self.validate_delivery(path).returncode, 0)
         with tempfile.TemporaryDirectory() as td:
-            for version in (3, 4, 5):
+            card = self.init(td, mode="card")
+            self.assertNotIn("directory_chain", json.loads(card.read_text())["delivery"])
+
+    def test_force_rebuilds_v3_v4_v5_v6_as_v7(self):
+        with tempfile.TemporaryDirectory() as td:
+            for version in (3, 4, 5, 6):
                 path = Path(td) / f"v{version}.json"
                 path.write_text(json.dumps({"schema_version": version, "generation": 2, "revision": 4}))
                 result = self.cli("init", path, "--force", "--delivery-mode", "card")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(json.loads(path.read_text())["schema_version"], 6)
+                self.assertEqual(json.loads(path.read_text())["schema_version"], 7)
 
 
 if __name__ == "__main__":
